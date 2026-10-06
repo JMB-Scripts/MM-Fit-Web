@@ -55,7 +55,7 @@
       margin-left: 8px;
       padding: 2px 7px;
       border-radius: 10px;
-      background: #2F6FB0;
+      background: #C0392B;
       color: white;
       font-size: 10px;
       font-weight: bold;
@@ -234,7 +234,7 @@
   <div class="title">MM-Fit</div>
   <div class="subtitle">
     Michaelis-Menten enzyme kinetics analysis
-    <span class="version-badge">v3</span>
+    <span class="version-badge">v4</span>
   </div>
 </div>
 
@@ -507,14 +507,12 @@ def _fit_data():
         return
 
     # --------------------------------------------------------------
-    # Plotly: main MM graph + one residual panel per series
+    # Plotly: main MM graph + one separate residual panel per series
     # --------------------------------------------------------------
 
     traces = []
-    annotations = []
-    shapes = []
+    nseries = len(results)
 
-    # Main plot
     for i, r in enumerate(results):
         color = COLORS[i % len(COLORS)]
         marker = MARKERS[i % len(MARKERS)]
@@ -525,6 +523,7 @@ def _fit_data():
         s_plot = np.linspace(0, smax * 1.2, 250)
         fit = michaelis_menten(s_plot, r["vmax"], r["km"])
 
+        # Main MM plot
         traces.append({
             "x": s.tolist(),
             "y": v.tolist(),
@@ -551,9 +550,13 @@ def _fit_data():
             "yaxis": "y",
         })
 
-        # Residual subplot
+        # One independent residual panel for THIS series
         residuals = v - michaelis_menten(s, r["vmax"], r["km"])
         tolerance = 0.10 * michaelis_menten(s_plot, r["vmax"], r["km"])
+
+        row = i + 2
+        xaxis_name = f"x{row}"
+        yaxis_name = f"y{row}"
 
         traces.append({
             "x": s.tolist(),
@@ -563,8 +566,8 @@ def _fit_data():
             "name": f"Residuals {r['series']}",
             "showlegend": False,
             "marker": {"color": color, "symbol": marker, "size": 7},
-            "xaxis": "x2",
-            "yaxis": "y2",
+            "xaxis": xaxis_name,
+            "yaxis": yaxis_name,
         })
 
         traces.append({
@@ -577,8 +580,8 @@ def _fit_data():
             "line": {"color": color, "width": 0},
             "name": "±10% tolerance",
             "showlegend": False,
-            "xaxis": "x2",
-            "yaxis": "y2",
+            "xaxis": xaxis_name,
+            "yaxis": yaxis_name,
         })
 
         traces.append({
@@ -588,26 +591,50 @@ def _fit_data():
             "mode": "lines",
             "line": {"color": "#444", "width": 1},
             "showlegend": False,
-            "xaxis": "x2",
-            "yaxis": "y2",
+            "xaxis": xaxis_name,
+            "yaxis": yaxis_name,
         })
 
-    # Use one residual panel in this first version.
-    # Multiple series share the same residual axes.
+    # Layout: main plot + one residual panel per series
+    main_height = 0.40
+    gap = 0.015
+    residual_height = (1.0 - main_height - gap * nseries) / nseries
+
     layout = {
         "title": {"text": "Michaelis-Menten Kinetics", "font": {"size": 18}},
-        "height": 720,
+        "height": 500 + 170 * nseries,
         "margin": {"l": 65, "r": 25, "t": 55, "b": 55},
         "legend": {"font": {"size": 11}},
-        "grid": {"rows": 2, "columns": 1, "pattern": "independent"},
-        "xaxis": {"title": "[S]₀", "domain": [0, 1]},
-        "yaxis": {"title": "v₀", "domain": [0.36, 1]},
-        "xaxis2": {"title": "[S]₀", "domain": [0, 1]},
-        "yaxis2": {"title": "Residuals", "domain": [0, 0.28]},
+        "xaxis": {
+            "title": "[S]₀",
+            "domain": [0, 1],
+            "anchor": "y"
+        },
+        "yaxis": {
+            "title": "v₀",
+            "domain": [1.0 - main_height, 1.0],
+            "anchor": "x"
+        },
     }
 
+    # Add separate domains for residual panels.
+    for i, r in enumerate(results):
+        row = i + 2
+        top = 1.0 - main_height - gap - i * (residual_height + gap)
+        bottom = top - residual_height
+
+        layout[f"xaxis{row}"] = {
+            "title": "[S]₀" if i == nseries - 1 else "",
+            "domain": [0, 1],
+            "anchor": f"y{row}"
+        }
+        layout[f"yaxis{row}"] = {
+            "title": f"Residuals {r['series']}",
+            "domain": [bottom, top],
+            "anchor": f"x{row}"
+        }
+
     # JSON is a robust Python -> JavaScript bridge in Pyodide.
-    # Plotly receives native JavaScript objects after JSON.parse().
     config = {
         "responsive": True,
         "displaylogo": False
