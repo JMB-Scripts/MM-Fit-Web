@@ -18,7 +18,7 @@
       --mm-blue: #5B88A5;
       --mm-grey: #708090;
       --mm-yellow: #D4AC0D;
-      --mm-red: #C0392B;
+      --mm-red: #2F6FB0;
       --border: #d8dee2;
       --background: #f4f6f7;
     }
@@ -55,7 +55,7 @@
       margin-left: 8px;
       padding: 2px 7px;
       border-radius: 10px;
-      background: #C0392B;
+      background: #2F6FB0;
       color: white;
       font-size: 10px;
       font-weight: bold;
@@ -234,7 +234,7 @@
   <div class="title">MM-Fit</div>
   <div class="subtitle">
     Michaelis-Menten enzyme kinetics analysis
-    <span class="version-badge">v4</span>
+    <span class="version-badge">v5</span>
   </div>
 </div>
 
@@ -252,6 +252,7 @@
 
     <button id="paste-btn" class="utility">1- Paste from Excel</button>
     <button id="fit-btn" class="action">2- MM-Fit</button>
+    <button id="lb-btn" class="utility">3- LB plot</button>
     <button id="reset-btn" class="warning">Reset</button>
 
     <div id="status" class="status">Paste your Excel data to begin.</div>
@@ -699,6 +700,95 @@ js("#reset-btn").onclick = lambda e: reset()
 render_series()
 render_table()
 js("#loading").classList.add("hidden")
+
+async function run_lb() {
+  const selected = Array.from(document.querySelectorAll('.series-check:checked'))
+    .map(x => x.value);
+  if (!selected.length) { set_status("Select at least one series."); return; }
+  if (!window.pyodide) { set_status("Python is not ready yet."); return; }
+
+  const payload = {
+    series: selected,
+    concentrations: tableData.map(r => r.s),
+    values: Object.fromEntries(selected.map(n => [n, tableData.map(r => r.values[n])]))
+  };
+  set_status("Calculating Lineweaver–Burk plots...");
+
+  try {
+    const pyPayload = JSON.stringify(payload);
+    const result = await pyodide.runPythonAsync(`
+import json
+import numpy as np
+from scipy.stats import linregress
+payload = json.loads(${repr(pyPayload)})
+out = []
+for name in payload["series"]:
+    s = np.asarray(payload["concentrations"], dtype=float)
+    v = np.asarray(payload["values"][name], dtype=float)
+    mask = np.isfinite(s) & np.isfinite(v) & (s > 0) & (v > 0)
+    x, y = 1.0/s[mask], 1.0/v[mask]
+    if len(x) < 3: continue
+    fit = linregress(x, y)
+    slope, intercept = fit.slope, fit.intercept
+    if not np.isfinite(slope) or not np.isfinite(intercept) or intercept == 0: continue
+    vmax, km = 1.0/intercept, slope/intercept
+    slope_se, intercept_se = fit.stderr, fit.intercept_stderr
+    vmax_se = abs(intercept_se/(intercept**2))
+    km_se = (abs(km)*np.sqrt((slope_se/slope)**2+(intercept_se/intercept)**2)
+             if slope != 0 else float("nan"))
+    xx = np.linspace(float(np.min(x)), float(np.max(x)), 100)
+    yy = intercept + slope*xx
+    out.append({"name":name,"x":x.tolist(),"y":y.tolist(),
+                "xx":xx.tolist(),"yy":yy.tolist(),"r2":float(fit.rvalue**2),
+                "vmax":float(vmax),"vmax_se":float(vmax_se),
+                "km":float(km),"km_se":float(km_se),"n":int(len(x))})
+json.dumps(out)
+    `);
+
+    const results = JSON.parse(result);
+    if (!results.length) {
+      set_status("LB plot: no valid series (need ≥3 positive [S] and v values).");
+      return;
+    }
+    show_lb_plot(results);
+    set_status("Lineweaver–Burk plot generated.");
+  } catch (err) {
+    set_status("LB error: " + err);
+    console.error(err);
+  }
+}
+
+function show_lb_plot(results) {
+  const traces = [];
+  results.forEach(r => {
+    traces.push({x:r.x,y:r.y,mode:"markers",type:"scatter",name:r.name,
+                 marker:{size:8},legendgroup:r.name});
+    traces.push({x:r.xx,y:r.yy,mode:"lines",type:"scatter",
+                 name:r.name+" fit",legendgroup:r.name,showlegend:false});
+  });
+  const annotations = results.map((r,i) => ({
+    xref:"paper",yref:"paper",x:0.01,y:0.99-i*0.075,
+    xanchor:"left",yanchor:"top",
+    text:"<b>"+r.name+"</b> &nbsp; Vmax = "+format_num(r.vmax)+" ± "+format_num(r.vmax_se)+
+         " &nbsp; Km = "+format_num(r.km)+" ± "+format_num(r.km_se)+
+         " &nbsp; R² = "+r.r2.toFixed(4),
+    showarrow:false,font:{size:12}
+  }));
+  Plotly.newPlot("mm-plot", traces, {
+    title:"Lineweaver–Burk plot",
+    xaxis:{title:"1 / [S]₀",zeroline:true},
+    yaxis:{title:"1 / v",zeroline:true},
+    hovermode:"closest",margin:{l:75,r:25,t:60,b:65},
+    annotations,legend:{orientation:"h",y:-0.18}
+  }, {responsive:true});
+}
+
+function format_num(x) {
+  if (!Number.isFinite(x)) return "—";
+  const ax=Math.abs(x);
+  return (ax!==0 && (ax<0.01 || ax>=1000)) ? x.toExponential(2) : x.toFixed(3);
+}
+
 </script>
 
 </body>
