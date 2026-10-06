@@ -260,6 +260,7 @@
 import numpy as np
 from scipy.optimize import curve_fit
 from pyscript import document, window
+from pyodide.ffi import to_js
 
 # ------------------------------------------------------------------
 # MM-Fit data model
@@ -351,7 +352,10 @@ def render_table():
             td = document.createElement("td")
             inp = document.createElement("input")
             inp.type = "text"
-            inp.value = str(data[h][i])
+            if h == "[S]0":
+                inp.value = f"{float(data[h][i]):.3e}"
+            else:
+                inp.value = f"{float(data[h][i]):.3e}"
             inp.onchange = lambda e, i=i, h=h: set_value(i, h, e.target.value)
             td.appendChild(inp)
             tr.appendChild(td)
@@ -415,6 +419,16 @@ def parse_paste():
         set_status(f"Could not read data: {exc}")
 
 def fit_data():
+    try:
+        _fit_data()
+    except Exception as exc:
+        set_status(f"MM-Fit error: {type(exc).__name__}: {exc}")
+        js("#summary").innerHTML = (
+            '<div class="summary-title">Fit error</div>'
+            f'<pre style="white-space:pre-wrap">{type(exc).__name__}: {exc}</pre>'
+        )
+
+def _fit_data():
     series_list = selected_series()
 
     if not series_list:
@@ -577,11 +591,18 @@ def fit_data():
         "yaxis2": {"title": "Residuals", "domain": [0, 0.28]},
     }
 
+    # Convert Python objects explicitly to JavaScript objects.
+    # This is important for Plotly when Python is running through WebAssembly.
+    config = {
+        "responsive": True,
+        "displaylogo": False
+    }
+
     window.Plotly.newPlot(
         "mm-plot",
-        traces,
-        layout,
-        {"responsive": True, "displaylogo": False}
+        to_js(traces, dict_converter=js),
+        to_js(layout, dict_converter=js),
+        to_js(config, dict_converter=js)
     )
 
     # Summary
