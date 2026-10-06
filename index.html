@@ -349,7 +349,7 @@ def render_series():
         box.appendChild(label)
 
 def render_table():
-    cols = ["Exclude", "[S]0"] + series_names
+    cols = list(data.keys())
     rows = len(data["[S]0"])
 
     table = '<table><thead><tr>'
@@ -374,7 +374,9 @@ def render_table():
             f'value="{fmt(s)}"></td>'
         )
 
-        for c in series_names:
+        for c in data.keys():
+            if c in ("Exclude", "[S]0"):
+                continue
             val = data[c][i]
             table += (
                 f'<td><input class="data-input" data-col="{c}" data-row="{i}" '
