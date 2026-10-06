@@ -18,7 +18,7 @@
       --mm-blue: #5B88A5;
       --mm-grey: #708090;
       --mm-yellow: #D4AC0D;
-      --mm-red: #C0392B;
+      --mm-red: #2F6FB0;
       --border: #d8dee2;
       --background: #f4f6f7;
     }
@@ -55,7 +55,7 @@
       margin-left: 8px;
       padding: 2px 7px;
       border-radius: 10px;
-      background: #C0392B;
+      background: #2F6FB0;
       color: white;
       font-size: 10px;
       font-weight: bold;
@@ -224,7 +224,21 @@
       .controls h3 { grid-column: 1 / -1; }
       textarea { min-height: 100px; }
     }
-  </style>
+  
+  .exclude-mode {
+    outline: 2px solid #708090;
+    outline-offset: 2px;
+  }
+  .excluded-row {
+    opacity: 0.55;
+    background: #f3f3f3 !important;
+  }
+  .exclude-cell input {
+    transform: scale(1.15);
+    cursor: pointer;
+  }
+
+</style>
 </head>
 
 <body>
@@ -234,7 +248,7 @@
   <div class="title">MM-Fit</div>
   <div class="subtitle">
     Michaelis-Menten enzyme kinetics analysis
-    <span class="version-badge">v6</span>
+    <span class="version-badge">v7</span>
   </div>
 </div>
 
@@ -253,6 +267,7 @@
     <button id="paste-btn" class="utility">1- Paste from Excel</button>
     <button id="fit-btn" class="action">2- MM-Fit</button>
     <button id="lb-btn" class="utility">3- LB plot</button>
+    <button id="exclude-btn" class="secondary">4- Exclude data</button>
     <button id="reset-btn" class="warning">Reset</button>
 
     <div id="status" class="status">Paste your Excel data to begin.</div>
@@ -461,8 +476,11 @@ def _fit_data():
         excluded = np.asarray(data["Exclude"], dtype=bool)
 
         valid = np.isfinite(s) & np.isfinite(v) & (~excluded)
+        excluded_valid = np.isfinite(s) & np.isfinite(v) & excluded
         s_fit = s[valid]
         v_fit = v[valid]
+        s_excluded = s[excluded_valid]
+        v_excluded = v[excluded_valid]
 
         if len(s_fit) < 3:
             continue
@@ -499,6 +517,8 @@ def _fit_data():
                 "vmax_se": vmax_se,
                 "km_se": km_se,
                 "r2": r2,
+                "s_excluded": s_excluded,
+                "v_excluded": v_excluded,
             })
 
         except Exception:
@@ -536,6 +556,24 @@ def _fit_data():
             "xaxis": "x",
             "yaxis": "y",
         })
+
+        # Explicitly show excluded points as crosses.
+        if len(r["s_excluded"]) > 0:
+            traces.append({
+                "x": r["s_excluded"].tolist(),
+                "y": r["v_excluded"].tolist(),
+                "type": "scatter",
+                "mode": "markers",
+                "name": f"Excluded {r['series']}",
+                "marker": {
+                    "color": color,
+                    "symbol": "x",
+                    "size": 11,
+                    "line": {"width": 2}
+                },
+                "xaxis": "x",
+                "yaxis": "y",
+            })
 
         traces.append({
             "x": s_plot.tolist(),
@@ -805,6 +843,15 @@ def lb_plot():
     except Exception as exc:
         set_status(f"LB error: {type(exc).__name__}: {exc}")
 
+
+def exclude_data():
+    """Apply the current Exclude checkboxes and immediately refit."""
+    try:
+        _fit_data()
+        set_status("Excluded points applied. Fit updated.")
+    except Exception as exc:
+        set_status(f"Exclude error: {type(exc).__name__}: {exc}")
+
 def reset():
     data.clear()
     data.update({
@@ -830,6 +877,7 @@ def reset():
 js("#paste-btn").onclick = lambda e: parse_paste()
 js("#fit-btn").onclick = lambda e: fit_data()
 js("#lb-btn").onclick = lambda e: lb_plot()
+js("#exclude-btn").onclick = lambda e: exclude_data()
 js("#reset-btn").onclick = lambda e: reset()
 
 render_series()
