@@ -275,6 +275,7 @@
 <script type="py" config='{"packages":["numpy","scipy"]}'>
 import numpy as np
 from scipy.optimize import curve_fit
+from scipy.stats import linregress
 from pyscript import document, window
 import json
 
@@ -671,6 +672,117 @@ def _fit_data():
     js("#summary").innerHTML = summary
     set_status(f"{len(results)} series fitted.")
 
+
+def lb_plot():
+    try:
+        series_list = selected_series()
+        if not series_list:
+            set_status("Select at least one series.")
+            return
+
+        results = []
+        for series in series_list:
+            s = np.asarray(data["[S]0"], dtype=float)
+            v = np.asarray(data[series], dtype=float)
+            excluded = np.asarray(data["Exclude"], dtype=bool)
+
+            valid = np.isfinite(s) & np.isfinite(v) & (~excluded) & (s > 0) & (v > 0)
+            x = 1.0 / s[valid]
+            y = 1.0 / v[valid]
+
+            if len(x) < 3:
+                continue
+
+            fit = linregress(x, y)
+            slope = float(fit.slope)
+            intercept = float(fit.intercept)
+
+            if not np.isfinite(slope) or not np.isfinite(intercept) or intercept == 0:
+                continue
+
+            vmax = 1.0 / intercept
+            km = slope / intercept
+
+            slope_se = float(fit.stderr) if fit.stderr is not None else float("nan")
+            intercept_se = float(fit.intercept_stderr) if fit.intercept_stderr is not None else float("nan")
+            vmax_se = abs(intercept_se / intercept**2)
+
+            if slope != 0 and np.isfinite(slope_se) and np.isfinite(intercept_se):
+                km_se = abs(km) * np.sqrt(
+                    (slope_se / slope)**2 + (intercept_se / intercept)**2
+                )
+            else:
+                km_se = float("nan")
+
+            xx = np.linspace(float(np.min(x)), float(np.max(x)), 100)
+            yy = intercept + slope * xx
+
+            results.append({
+                "series": series, "x": x, "y": y,
+                "xx": xx, "yy": yy,
+                "vmax": vmax, "vmax_se": vmax_se,
+                "km": km, "km_se": km_se,
+                "r2": float(fit.rvalue**2)
+            })
+
+        if not results:
+            set_status("No valid series for LB plot. Need ≥3 positive points.")
+            return
+
+        traces=[]
+        for i,r in enumerate(results):
+            color=COLORS[i % len(COLORS)]
+            marker=MARKERS[i % len(MARKERS)]
+            traces.append({
+                "x":r["x"].tolist(),"y":r["y"].tolist(),
+                "type":"scatter","mode":"markers",
+                "name":f"Data {r['series']}",
+                "marker":{"color":color,"symbol":marker,"size":8}
+            })
+            traces.append({
+                "x":r["xx"].tolist(),"y":r["yy"].tolist(),
+                "type":"scatter","mode":"lines",
+                "name":f"Fit {r['series']}",
+                "line":{"color":color,"width":2}
+            })
+
+        annotations=[]
+        for i,r in enumerate(results):
+            annotations.append({
+                "xref":"paper","yref":"paper",
+                "x":0.01,"y":0.99-i*0.075,
+                "xanchor":"left","yanchor":"top",
+                "text":(
+                    f"<b>{r['series']}</b> — "
+                    f"Vmax={r['vmax']:.3e} ± {r['vmax_se']:.2e} &nbsp; "
+                    f"Km={r['km']:.3e} ± {r['km_se']:.2e} &nbsp; "
+                    f"R²={r['r2']:.4f}"
+                ),
+                "showarrow":False,"font":{"size":12}
+            })
+
+        layout={
+            "title":{"text":"Lineweaver–Burk Plot","font":{"size":18}},
+            "height":560,
+            "margin":{"l":70,"r":25,"t":75,"b":65},
+            "xaxis":{"title":"1 / [S]₀","zeroline":True},
+            "yaxis":{"title":"1 / v₀","zeroline":True},
+            "annotations":annotations,
+            "legend":{"font":{"size":11}}
+        }
+        config={"responsive":True,"displaylogo":False}
+
+        window.Plotly.newPlot(
+            "mm-plot",
+            window.JSON.parse(json.dumps(traces)),
+            window.JSON.parse(json.dumps(layout)),
+            window.JSON.parse(json.dumps(config))
+        )
+        set_status(f"{len(results)} series plotted in Lineweaver–Burk form.")
+
+    except Exception as exc:
+        set_status(f"LB error: {type(exc).__name__}: {exc}")
+
 def reset():
     data.clear()
     data.update({
@@ -695,100 +807,12 @@ def reset():
 
 js("#paste-btn").onclick = lambda e: parse_paste()
 js("#fit-btn").onclick = lambda e: fit_data()
+js("#lb-btn").onclick = lambda e: lb_plot()
 js("#reset-btn").onclick = lambda e: reset()
 
 render_series()
 render_table()
 js("#loading").classList.add("hidden")
-
-async function run_lb() {
-  const selected = Array.from(document.querySelectorAll('.series-check:checked'))
-    .map(x => x.value);
-  if (!selected.length) { set_status("Select at least one series."); return; }
-  if (!window.pyodide) { set_status("Python is not ready yet."); return; }
-
-  const payload = {
-    series: selected,
-    concentrations: tableData.map(r => r.s),
-    values: Object.fromEntries(selected.map(n => [n, tableData.map(r => r.values[n])]))
-  };
-  set_status("Calculating Lineweaver–Burk plots...");
-
-  try {
-    const pyPayload = JSON.stringify(payload);
-    const result = await pyodide.runPythonAsync(`
-import json
-import numpy as np
-from scipy.stats import linregress
-payload = json.loads(${repr(pyPayload)})
-out = []
-for name in payload["series"]:
-    s = np.asarray(payload["concentrations"], dtype=float)
-    v = np.asarray(payload["values"][name], dtype=float)
-    mask = np.isfinite(s) & np.isfinite(v) & (s > 0) & (v > 0)
-    x, y = 1.0/s[mask], 1.0/v[mask]
-    if len(x) < 3: continue
-    fit = linregress(x, y)
-    slope, intercept = fit.slope, fit.intercept
-    if not np.isfinite(slope) or not np.isfinite(intercept) or intercept == 0: continue
-    vmax, km = 1.0/intercept, slope/intercept
-    slope_se, intercept_se = fit.stderr, fit.intercept_stderr
-    vmax_se = abs(intercept_se/(intercept**2))
-    km_se = (abs(km)*np.sqrt((slope_se/slope)**2+(intercept_se/intercept)**2)
-             if slope != 0 else float("nan"))
-    xx = np.linspace(float(np.min(x)), float(np.max(x)), 100)
-    yy = intercept + slope*xx
-    out.append({"name":name,"x":x.tolist(),"y":y.tolist(),
-                "xx":xx.tolist(),"yy":yy.tolist(),"r2":float(fit.rvalue**2),
-                "vmax":float(vmax),"vmax_se":float(vmax_se),
-                "km":float(km),"km_se":float(km_se),"n":int(len(x))})
-json.dumps(out)
-    `);
-
-    const results = JSON.parse(result);
-    if (!results.length) {
-      set_status("LB plot: no valid series (need ≥3 positive [S] and v values).");
-      return;
-    }
-    show_lb_plot(results);
-    set_status("Lineweaver–Burk plot generated.");
-  } catch (err) {
-    set_status("LB error: " + err);
-    console.error(err);
-  }
-}
-
-function show_lb_plot(results) {
-  const traces = [];
-  results.forEach(r => {
-    traces.push({x:r.x,y:r.y,mode:"markers",type:"scatter",name:r.name,
-                 marker:{size:8},legendgroup:r.name});
-    traces.push({x:r.xx,y:r.yy,mode:"lines",type:"scatter",
-                 name:r.name+" fit",legendgroup:r.name,showlegend:false});
-  });
-  const annotations = results.map((r,i) => ({
-    xref:"paper",yref:"paper",x:0.01,y:0.99-i*0.075,
-    xanchor:"left",yanchor:"top",
-    text:"<b>"+r.name+"</b> &nbsp; Vmax = "+format_num(r.vmax)+" ± "+format_num(r.vmax_se)+
-         " &nbsp; Km = "+format_num(r.km)+" ± "+format_num(r.km_se)+
-         " &nbsp; R² = "+r.r2.toFixed(4),
-    showarrow:false,font:{size:12}
-  }));
-  Plotly.newPlot("mm-plot", traces, {
-    title:"Lineweaver–Burk plot",
-    xaxis:{title:"1 / [S]₀",zeroline:true},
-    yaxis:{title:"1 / v",zeroline:true},
-    hovermode:"closest",margin:{l:75,r:25,t:60,b:65},
-    annotations,legend:{orientation:"h",y:-0.18}
-  }, {responsive:true});
-}
-
-function format_num(x) {
-  if (!Number.isFinite(x)) return "—";
-  const ax=Math.abs(x);
-  return (ax!==0 && (ax<0.01 || ax>=1000)) ? x.toExponential(2) : x.toFixed(3);
-}
-
 </script>
 
 </body>
