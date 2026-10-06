@@ -18,7 +18,7 @@
       --mm-blue: #5B88A5;
       --mm-grey: #708090;
       --mm-yellow: #D4AC0D;
-      --mm-red: #2F6FB0;
+      --mm-red: #C0392B;
       --border: #d8dee2;
       --background: #f4f6f7;
     }
@@ -55,7 +55,7 @@
       margin-left: 8px;
       padding: 2px 7px;
       border-radius: 10px;
-      background: #2F6FB0;
+      background: #C0392B;
       color: white;
       font-size: 10px;
       font-weight: bold;
@@ -248,7 +248,7 @@
   <div class="title">MM-Fit</div>
   <div class="subtitle">
     Michaelis-Menten enzyme kinetics analysis
-    <span class="version-badge">v7</span>
+    <span class="version-badge">v8</span>
   </div>
 </div>
 
@@ -267,10 +267,9 @@
     <button id="paste-btn" class="utility">1- Paste from Excel</button>
     <button id="fit-btn" class="action">2- MM-Fit</button>
     <button id="lb-btn" class="utility">3- LB plot</button>
-    <button id="exclude-btn" class="secondary">4- Exclude data</button>
     <button id="reset-btn" class="warning">Reset</button>
 
-    <div id="status" class="status">Paste your Excel data to begin.</div>
+    <div id="status" class="status">Paste your Excel data to begin. Check a box to exclude a point.</div>
   </div>
 
   <div class="panel data-panel">
@@ -350,53 +349,58 @@ def render_series():
         box.appendChild(label)
 
 def render_table():
-    headers = list(data.keys())
-    n = len(data["[S]0"])
+    cols = ["Exclude", "[S]0"] + series_names
+    rows = len(data["[S]0"])
 
-    table = document.createElement("table")
-    thead = document.createElement("thead")
-    tr = document.createElement("tr")
+    table = '<table><thead><tr>'
+    for c in cols:
+        table += f"<th>{c}</th>"
+    table += "</tr></thead><tbody>"
 
-    for h in headers:
-        th = document.createElement("th")
-        th.innerText = h
-        tr.appendChild(th)
+    for i in range(rows):
+        table += "<tr>"
 
-    thead.appendChild(tr)
-    table.appendChild(thead)
+        checked = " checked" if bool(data["Exclude"][i]) else ""
+        table += (
+            '<td class="exclude-cell">'
+            f'<input type="checkbox" class="exclude-point" '
+            f'data-row="{i}"{checked}>'
+            '</td>'
+        )
 
-    tbody = document.createElement("tbody")
+        s = data["[S]0"][i]
+        table += (
+            f'<td><input class="data-input" data-col="[S]0" data-row="{i}" '
+            f'value="{fmt(s)}"></td>'
+        )
 
-    for i in range(n):
-        tr = document.createElement("tr")
+        for c in series_names:
+            val = data[c][i]
+            table += (
+                f'<td><input class="data-input" data-col="{c}" data-row="{i}" '
+                f'value="{fmt(val)}"></td>'
+            )
 
-        # Exclude checkbox
-        td = document.createElement("td")
-        cb = document.createElement("input")
-        cb.type = "checkbox"
-        cb.checked = bool(data["Exclude"][i])
-        cb.onchange = lambda e, i=i: set_exclude(i, e.target.checked)
-        td.appendChild(cb)
-        tr.appendChild(td)
+        table += "</tr>"
 
-        # Numeric cells
-        for h in headers[1:]:
-            td = document.createElement("td")
-            inp = document.createElement("input")
-            inp.type = "text"
-            if h == "[S]0":
-                inp.value = f"{float(data[h][i]):.3e}"
-            else:
-                inp.value = f"{float(data[h][i]):.3e}"
-            inp.onchange = lambda e, i=i, h=h: set_value(i, h, e.target.value)
-            td.appendChild(inp)
-            tr.appendChild(td)
+    table += "</tbody></table>"
+    js("#table-wrap").innerHTML = table
 
-        tbody.appendChild(tr)
+    # Every row has its own exclusion checkbox.
+    for cb in document.querySelectorAll(".exclude-point"):
+        cb.onchange = lambda e: set_exclude(
+            int(e.target.getAttribute("data-row")),
+            bool(e.target.checked)
+        )
 
-    table.appendChild(tbody)
-    js("#table-wrap").innerHTML = ""
-    js("#table-wrap").appendChild(table)
+    # Editable data cells.
+    for inp in document.querySelectorAll(".data-input"):
+        inp.onchange = lambda e: set_value(
+            e.target.getAttribute("data-col"),
+            int(e.target.getAttribute("data-row")),
+            e.target.value
+        )
+
 
 def set_exclude(i, value):
     data["Exclude"][i] = bool(value)
@@ -844,14 +848,6 @@ def lb_plot():
         set_status(f"LB error: {type(exc).__name__}: {exc}")
 
 
-def exclude_data():
-    """Apply the current Exclude checkboxes and immediately refit."""
-    try:
-        _fit_data()
-        set_status("Excluded points applied. Fit updated.")
-    except Exception as exc:
-        set_status(f"Exclude error: {type(exc).__name__}: {exc}")
-
 def reset():
     data.clear()
     data.update({
@@ -868,7 +864,7 @@ def reset():
         'Fit results will appear here.'
     )
     window.Plotly.purge("mm-plot")
-    set_status("Paste your Excel data to begin.")
+    set_status("Paste your Excel data to begin. Check a box to exclude a point.")
 
 # ------------------------------------------------------------------
 # Events
@@ -877,7 +873,6 @@ def reset():
 js("#paste-btn").onclick = lambda e: parse_paste()
 js("#fit-btn").onclick = lambda e: fit_data()
 js("#lb-btn").onclick = lambda e: lb_plot()
-js("#exclude-btn").onclick = lambda e: exclude_data()
 js("#reset-btn").onclick = lambda e: reset()
 
 render_series()
