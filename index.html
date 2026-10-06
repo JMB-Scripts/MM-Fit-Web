@@ -50,6 +50,18 @@
       margin-top: 3px;
     }
 
+    .version-badge {
+      display: inline-block;
+      margin-left: 8px;
+      padding: 2px 7px;
+      border-radius: 10px;
+      background: #2F6FB0;
+      color: white;
+      font-size: 10px;
+      font-weight: bold;
+      vertical-align: 1px;
+    }
+
     .layout {
       display: grid;
       grid-template-columns: 205px minmax(0, 1fr);
@@ -220,7 +232,10 @@
 
 <div class="header">
   <div class="title">MM-Fit</div>
-  <div class="subtitle">Michaelis-Menten enzyme kinetics analysis</div>
+  <div class="subtitle">
+    Michaelis-Menten enzyme kinetics analysis
+    <span class="version-badge">v3</span>
+  </div>
 </div>
 
 <div class="layout">
@@ -260,7 +275,7 @@
 import numpy as np
 from scipy.optimize import curve_fit
 from pyscript import document, window
-from pyodide.ffi import to_js
+import json
 
 # ------------------------------------------------------------------
 # MM-Fit data model
@@ -591,18 +606,22 @@ def _fit_data():
         "yaxis2": {"title": "Residuals", "domain": [0, 0.28]},
     }
 
-    # Convert Python objects explicitly to JavaScript objects.
-    # This is important for Plotly when Python is running through WebAssembly.
+    # JSON is a robust Python -> JavaScript bridge in Pyodide.
+    # Plotly receives native JavaScript objects after JSON.parse().
     config = {
         "responsive": True,
         "displaylogo": False
     }
 
+    js_traces = window.JSON.parse(json.dumps(traces))
+    js_layout = window.JSON.parse(json.dumps(layout))
+    js_config = window.JSON.parse(json.dumps(config))
+
     window.Plotly.newPlot(
         "mm-plot",
-        to_js(traces, dict_converter=js),
-        to_js(layout, dict_converter=js),
-        to_js(config, dict_converter=js)
+        js_traces,
+        js_layout,
+        js_config
     )
 
     # Summary
