@@ -18,7 +18,7 @@
       --mm-blue: #5B88A5;
       --mm-grey: #708090;
       --mm-yellow: #D4AC0D;
-      --mm-red: #2F6FB0;
+      --mm-red: #C0392B;
       --border: #d8dee2;
       --background: #f4f6f7;
     }
@@ -55,7 +55,7 @@
       margin-left: 8px;
       padding: 2px 7px;
       border-radius: 10px;
-      background: #2F6FB0;
+      background: #C0392B;
       color: white;
       font-size: 10px;
       font-weight: bold;
@@ -234,7 +234,7 @@
   <div class="title">MM-Fit</div>
   <div class="subtitle">
     Michaelis-Menten enzyme kinetics analysis
-    <span class="version-badge">v5</span>
+    <span class="version-badge">v6</span>
   </div>
 </div>
 
@@ -610,12 +610,14 @@ def _fit_data():
         "xaxis": {
             "title": "[S]₀",
             "domain": [0, 1],
-            "anchor": "y"
+            "anchor": "y",
+            "tickformat": ".1e"
         },
         "yaxis": {
             "title": "v₀",
             "domain": [1.0 - main_height, 1.0],
-            "anchor": "x"
+            "anchor": "x",
+            "tickformat": ".1e"
         },
     }
 
@@ -714,12 +716,22 @@ def lb_plot():
             else:
                 km_se = float("nan")
 
-            xx = np.linspace(float(np.min(x)), float(np.max(x)), 100)
+            # Extend the regression line into the negative 1/[S] region
+            # so that the x-intercept (-1/Km) is visible.
+            x_intercept = -intercept / slope if slope != 0 else 0.0
+            xmax = float(np.max(x))
+            xmin_data = float(np.min(x))
+            xmin = min(x_intercept * 1.20, -0.10 * xmax, -0.05 * max(xmax, xmin_data))
+            if xmin >= 0:
+                xmin = -0.10 * xmax
+
+            xx = np.linspace(xmin, xmax * 1.05, 200)
             yy = intercept + slope * xx
 
             results.append({
                 "series": series, "x": x, "y": y,
                 "xx": xx, "yy": yy,
+                "x_intercept": x_intercept,
                 "vmax": vmax, "vmax_se": vmax_se,
                 "km": km, "km_se": km_se,
                 "r2": float(fit.rvalue**2)
@@ -765,8 +777,18 @@ def lb_plot():
             "title":{"text":"Lineweaver–Burk Plot","font":{"size":18}},
             "height":560,
             "margin":{"l":70,"r":25,"t":75,"b":65},
-            "xaxis":{"title":"1 / [S]₀","zeroline":True},
-            "yaxis":{"title":"1 / v₀","zeroline":True},
+            "xaxis":{
+                "title":"1 / [S]₀",
+                "zeroline":True,
+                "tickformat":".1e",
+                "rangemode":"normal"
+            },
+            "yaxis":{
+                "title":"1 / v₀",
+                "zeroline":True,
+                "tickformat":".1e",
+                "rangemode":"normal"
+            },
             "annotations":annotations,
             "legend":{"font":{"size":11}}
         }
