@@ -18,7 +18,7 @@
       --mm-blue: #5B88A5;
       --mm-grey: #708090;
       --mm-yellow: #D4AC0D;
-      --mm-red: #C0392B;
+      --mm-red: #2F6FB0;
       --border: #d8dee2;
       --background: #f4f6f7;
     }
@@ -55,7 +55,7 @@
       margin-left: 8px;
       padding: 2px 7px;
       border-radius: 10px;
-      background: #C0392B;
+      background: #2F6FB0;
       color: white;
       font-size: 10px;
       font-weight: bold;
@@ -248,7 +248,7 @@
   <div class="title">MM-Fit</div>
   <div class="subtitle">
     Michaelis-Menten enzyme kinetics analysis
-    <span class="version-badge">v8</span>
+    <span class="version-badge">v9</span>
   </div>
 </div>
 
@@ -389,10 +389,13 @@ def render_table():
     js("#table-wrap").innerHTML = table
 
     # Every row has its own exclusion checkbox.
+    # Capture the checkbox itself: this is more reliable with PyScript's
+    # JavaScript proxy objects than relying on e.target.
     for cb in document.querySelectorAll(".exclude-point"):
-        cb.onchange = lambda e: set_exclude(
-            int(e.target.getAttribute("data-row")),
-            bool(e.target.checked)
+        row = int(cb.getAttribute("data-row"))
+        cb.onchange = lambda e, cb=cb, row=row: set_exclude(
+            row,
+            bool(cb.checked)
         )
 
     # Editable data cells.
@@ -406,6 +409,9 @@ def render_table():
 
 def set_exclude(i, value):
     data["Exclude"][i] = bool(value)
+    # Do not rebuild the table: rebuilding would interrupt the current click.
+    # The fit routines read data["Exclude"] directly.
+
 
 def set_value(i, h, value):
     try:
