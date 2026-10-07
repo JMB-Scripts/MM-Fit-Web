@@ -33,4 +33,4 @@ No installation is required. Calculations are performed directly in the browser 
 - Plotly
 - GitHub Pages
 
-Designed for teaching enzyme kinetics in the **UGA Master Biochemistry and Structure** programme.
+Designed for teaching enzyme kinetics in the **UGA**
