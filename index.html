@@ -6,10 +6,8 @@
   <title>MM-Fit Web</title>
 
   <!-- PyScript / Python in the browser -->
-  <link rel="stylesheet" href="https://pyscript.net/releases/2026.7.1/core.css">
-  <script type="module" src="https://pyscript.net/releases/2026.7.1/core.js"></script>
-
-  <!-- Plotly for interactive browser graphics -->
+  <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
+  <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 
   <style>
@@ -18,7 +16,6 @@
       --mm-blue: #5B88A5;
       --mm-grey: #708090;
       --mm-yellow: #D4AC0D;
-      --mm-red: #2F6FB0;
       --border: #d8dee2;
       --background: #f4f6f7;
     }
@@ -26,258 +23,159 @@
     * { box-sizing: border-box; }
 
     body {
-      margin: 0;
-      background: var(--background);
-      color: #333;
-      font-family: Arial, Helvetica, sans-serif;
+      margin: 0; background: var(--background);
+      color: #333; font-family: Arial, Helvetica, sans-serif;
     }
 
-    .header {
-      background: white;
-      padding: 18px 24px 14px;
-      border-bottom: 1px solid var(--border);
-    }
+    .header { background: white; padding: 18px 24px 14px; border-bottom: 1px solid var(--border); }
+    .title { font-size: 27px; font-weight: 700; margin: 0; }
+    .subtitle { color: #666; font-size: 13px; margin-top: 3px; }
+    .version-badge { display: inline-block; margin-left: 8px; padding: 2px 7px; border-radius: 10px; background: #2F6FB0; color: white; font-size: 10px; font-weight: bold; vertical-align: 1px; }
 
-    .title {
-      font-size: 27px;
-      font-weight: 700;
-      margin: 0;
-    }
-
-    .subtitle {
-      color: #666;
-      font-size: 13px;
-      margin-top: 3px;
-    }
-
-    .version-badge {
-      display: inline-block;
-      margin-left: 8px;
-      padding: 2px 7px;
-      border-radius: 10px;
-      background: #2F6FB0;
-      color: white;
-      font-size: 10px;
-      font-weight: bold;
-      vertical-align: 1px;
-    }
-
+    /* Layout en 3 colonnes */
     .layout {
       display: grid;
-      grid-template-columns: 205px minmax(0, 1fr);
-      gap: 12px;
-      padding: 12px;
-      max-width: 1500px;
-      margin: auto;
+      grid-template-columns: minmax(280px, 1.2fr) 180px minmax(500px, 3fr);
+      gap: 12px; padding: 12px; max-width: 1600px; margin: auto;
     }
 
-    .panel {
-      background: white;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 12px;
-    }
+    .panel { background: white; border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; }
+    h3 { font-size: 15px; margin: 2px 0 8px; }
 
-    .controls h3 {
-      font-size: 15px;
-      margin: 2px 0 8px;
-    }
+    .series-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+    .series-item { display: flex; align-items: center; gap: 7px; font-size: 14px; }
 
-    .series-list {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      margin-bottom: 16px;
-    }
-
-    .series-item {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      font-size: 14px;
-    }
-
-    button {
-      width: 100%;
-      border: none;
-      border-radius: 5px;
-      padding: 9px 7px;
-      margin: 4px 0;
-      color: white;
-      font-weight: bold;
-      cursor: pointer;
-      font-size: 13px;
-    }
-
+    button { width: 100%; border: none; border-radius: 5px; padding: 9px 7px; margin: 4px 0; color: white; font-weight: bold; cursor: pointer; font-size: 13px; }
     button:hover { filter: brightness(0.94); }
-    button:disabled { opacity: 0.55; cursor: default; }
-
     .utility { background: var(--mm-blue); }
     .action { background: var(--mm-green); }
     .secondary { background: var(--mm-grey); }
     .warning { background: var(--mm-yellow); }
 
-    textarea {
-      width: 100%;
-      min-height: 130px;
-      resize: vertical;
-      border: 1px solid var(--border);
-      border-radius: 5px;
-      padding: 7px;
-      font-family: monospace;
-      font-size: 12px;
-    }
+    .status { color: #555; font-size: 12px; line-height: 1.4; margin-top: 10px; }
 
-    .status {
-      color: #555;
-      font-size: 12px;
-      line-height: 1.4;
-      margin-top: 10px;
-    }
-
-    .data-panel {
-      overflow-x: auto;
-    }
-
-    .table-wrap {
-      max-height: 300px;
-      overflow: auto;
-      border: 1px solid var(--border);
-      border-radius: 5px;
-      margin-bottom: 10px;
-    }
-
-    table {
-      border-collapse: collapse;
-      width: 100%;
-      font-size: 13px;
-      background: white;
-    }
-
-    th {
-      position: sticky;
-      top: 0;
-      background: #eef2f3;
-      z-index: 1;
-    }
-
-    th, td {
-      border-bottom: 1px solid #e3e6e8;
-      padding: 4px 6px;
-      text-align: right;
-      white-space: nowrap;
-    }
-
+    .table-wrap { max-height: 500px; overflow: auto; border: 1px solid var(--border); border-radius: 5px; margin-bottom: 15px; }
+    table { border-collapse: collapse; width: 100%; font-size: 13px; background: white; }
+    th { position: sticky; top: 0; background: #eef2f3; z-index: 1; padding: 6px; border-bottom: 1px solid #e3e6e8; }
+    td { border-bottom: 1px solid #e3e6e8; padding: 4px 6px; text-align: right; }
     th:first-child, td:first-child { text-align: center; }
+    td input { width: 100%; min-width: 65px; border: 1px solid transparent; background: transparent; padding: 3px; text-align: right; }
+    td input:focus { border-color: var(--mm-blue); background: white; outline: none; }
 
-    td input {
-      width: 100%;
-      min-width: 75px;
-      border: 1px solid transparent;
-      background: transparent;
-      padding: 3px;
-      text-align: right;
-    }
+    .plot { width: 100%; min-height: 550px; }
+    .summary { background: #fafbfb; border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin-top: 8px; font-size: 13px; line-height: 1.5; }
+    .summary-title { font-weight: bold; margin-bottom: 5px; }
+    
+    .loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.92); z-index: 100; font-size: 16px; }
+    .hidden { display: none !important; }
 
-    td input:focus {
-      border-color: var(--mm-blue);
-      background: white;
-      outline: none;
-    }
+    /* CSS pour la fenêtre modale (Exclude Data) */
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 200; }
+    .modal-content { background: white; padding: 20px; border-radius: 8px; width: 90%; max-width: 650px; max-height: 90vh; display: flex; flex-direction: column; }
+    .ex-cb { transform: scale(1.2); cursor: pointer; }
 
-    .plot {
-      width: 100%;
-      min-height: 500px;
-    }
-
-    .summary {
-      background: #fafbfb;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 10px 12px;
-      margin-top: 8px;
-      font-size: 13px;
-      line-height: 1.5;
-    }
-
-    .summary-title {
-      font-weight: bold;
-      margin-bottom: 5px;
-    }
-
-    .loading {
-      position: fixed;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: rgba(255,255,255,0.92);
-      z-index: 100;
-      font-size: 16px;
-    }
-
-    .hidden { display: none; }
-
-    @media (max-width: 800px) {
+    @media (max-width: 900px) {
       .layout { grid-template-columns: 1fr; }
       .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 10px; }
       .controls h3 { grid-column: 1 / -1; }
-      textarea { min-height: 100px; }
     }
-  
-  .exclude-mode {
-    outline: 2px solid #708090;
-    outline-offset: 2px;
-  }
-  .excluded-row {
-    opacity: 0.55;
-    background: #f3f3f3 !important;
-  }
-  .exclude-cell input {
-    transform: scale(1.15);
-    cursor: pointer;
-  }
+    /* --- ANIMATION ENZYME (LOADING) --- */
+    .loading {
+      position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; 
+      justify-content: center; background: rgba(255,255,255,0.95); z-index: 100;
+    }
+    .enzyme-container {
+      position: relative; width: 60px; height: 60px; margin-bottom: 20px;
+      animation: spin 2s linear infinite;
+    }
+    .enzyme {
+      width: 0; height: 0;
+      border-right: 30px solid transparent;
+      border-top: 30px solid var(--mm-blue);
+      border-left: 30px solid var(--mm-blue);
+      border-bottom: 30px solid var(--mm-blue);
+      border-radius: 50%;
+    }
+    .substrate {
+      position: absolute; width: 14px; height: 14px;
+      background: var(--mm-green); border-radius: 50%;
+      top: 23px; right: -5px;
+    }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
 
-</style>
+    /* --- MODE IMPRESSION (PRINT / PDF) --- */
+    @media print {
+      body { background: white; font-size: 11px; }
+      /* On cache tout ce qui ne doit pas être imprimé */
+      .header, .controls, #loading, .status, .modal { display: none !important; }
+      /* On redimensionne la mise en page pour remplir la feuille A4 */
+      .layout { display: block; padding: 0; max-width: 100%; }
+      .panel { border: none; padding: 0; margin-bottom: 20px; box-shadow: none; }
+      /* On déroule le tableau pour voir toutes les lignes */
+      .table-wrap { max-height: none; overflow: visible; border: none; }
+      table { border-collapse: collapse; }
+      th, td { border: 1px solid #ccc; padding: 4px; }
+      .plot { break-inside: avoid; } /* Évite de couper le graph sur 2 pages */
+    }
+  </style>
 </head>
 
 <body>
-<div id="loading" class="loading">Loading Python scientific libraries…</div>
+<div id="loading" class="loading">
+  <div class="enzyme-container">
+    <div class="enzyme"></div>
+    <div class="substrate"></div>
+  </div>
+  <div style="font-weight: bold; color: var(--mm-blue); font-size: 16px;">
+    Loading Python scientific libraries...
+  </div>
+</div>
+
+<!-- Modal Exclusion Dialog -->
+<div id="exclusion-modal" class="modal hidden">
+  <div class="modal-content">
+    <h3>Exclude Data Points</h3>
+    <div id="exclusion-grid-wrap" class="table-wrap"></div>
+    <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 15px;">
+      <button id="close-exclusion-btn" class="secondary" style="width: auto; padding: 8px 15px;">Cancel</button>
+      <button id="apply-exclusion-btn" class="action" style="width: auto; padding: 8px 15px;">Apply and Re-Fit</button>
+    </div>
+  </div>
+</div>
 
 <div class="header">
   <div class="title">MM-Fit</div>
-  <div class="subtitle">
-    Michaelis-Menten enzyme kinetics analysis
-    <span class="version-badge">v9</span>
-  </div>
+  <div class="subtitle">Michaelis-Menten enzyme kinetics analysis <span class="version-badge">v6.0</span></div>
 </div>
 
 <div class="layout">
 
+  <!-- Gauche : Data Table -->
+  <div class="panel data-panel">
+    <h3>Data Table</h3>
+    <div id="table-wrap" class="table-wrap"></div>
+    <div class="status" style="text-align: center; color: #666;">
+      <i>💡 Astuce : Faites <b>Ctrl+V</b> n'importe où sur la page pour importer vos données depuis Excel.</i>
+    </div>
+  </div>
+
+  <!-- Milieu : Contrôles -->
   <div class="panel controls">
     <h3>Series</h3>
     <div id="series-list" class="series-list"></div>
-
-    <h3>Data</h3>
-    <textarea id="paste-input" placeholder="[S]0	v0	v1
-0	0	0
-3.75e-4	4.32e-7	...
-4.37e-4	4.86e-7	..."></textarea>
-
+    <h3>Actions</h3>
     <button id="paste-btn" class="utility">1- Paste from Excel</button>
     <button id="fit-btn" class="action">2- MM-Fit</button>
-    <button id="lb-btn" class="utility">3- LB plot</button>
-    <button id="reset-btn" class="warning">Reset</button>
-
-    <div id="status" class="status">Paste your Excel data to begin. Check a box to exclude a point.</div>
+    <button id="lb-btn" class="action">3- LB plot</button>
+    <button id="exclusion-btn" class="secondary">(4- Exclude data)</button>
+    <button id="print-btn" class="utility">5- Print Report</button>
+    <button id="reset-btn" class="warning" style="margin-top: 20px;">Reset</button>
+    <div id="status" class="status">Ready.</div>
   </div>
 
-  <div class="panel data-panel">
-    <h3>Data</h3>
-    <div id="table-wrap" class="table-wrap"></div>
-
+  <!-- Droite : Graphique & Résumé -->
+  <div class="panel fit-panel">
     <div id="mm-plot" class="plot"></div>
-
     <div id="summary" class="summary">
       <div class="summary-title">Fit values</div>
       Fit results will appear here.
@@ -291,14 +189,13 @@ import numpy as np
 from scipy.optimize import curve_fit
 from scipy.stats import linregress
 from pyscript import document, window
+from pyodide.ffi import create_proxy
+import asyncio
 import json
 
-# ------------------------------------------------------------------
-# MM-Fit data model
-# ------------------------------------------------------------------
-
+# Data Model : Exclude est maintenant un dictionnaire par série
 data = {
-    "Exclude": [False, False, False, False, False],
+    "Exclude": {"v0": [False, False, False, False, False]},
     "[S]0": [0.0, 3.75e-4, 4.37e-4, 8.12e-4, 9.37e-4],
     "v0": [0.0, 4.32e-7, 4.86e-7, 5.08e-7, 5.45e-7],
 }
@@ -309,120 +206,60 @@ COLORS = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b"]
 def michaelis_menten(s, vmax, km):
     return (vmax * s) / (km + s)
 
-def js(id):
-    return document.querySelector(id)
-
-def set_status(message):
-    js("#status").innerText = message
-
-def fmt(x):
-    return f"{x:.3e}"
+def js(id): return document.querySelector(id)
+def set_status(message): js("#status").innerText = message
+def fmt(x): return f"{x:.3e}"
 
 def selected_series():
-    result = []
-    for el in document.querySelectorAll("#series-list input[type=checkbox]"):
-        if el.checked:
-            result.append(el.value)
-    return result
+    return [el.value for el in document.querySelectorAll("#series-list input[type=checkbox]") if el.checked]
 
 def render_series():
     box = js("#series-list")
     box.innerHTML = ""
-
     for series in data.keys():
-        if series in ("Exclude", "[S]0"):
-            continue
-
+        if series in ("Exclude", "[S]0"): continue
         label = document.createElement("label")
         label.className = "series-item"
-
         cb = document.createElement("input")
         cb.type = "checkbox"
         cb.value = series
         cb.checked = True
         label.appendChild(cb)
-
         text = document.createElement("span")
         text.innerText = series
         label.appendChild(text)
-
         box.appendChild(label)
 
 def render_table():
     cols = list(data.keys())
+    cols.remove("Exclude")
     rows = len(data["[S]0"])
-
+    
     table = '<table><thead><tr>'
-    for c in cols:
-        table += f"<th>{c}</th>"
+    table += "<th>#</th>"
+    for c in cols: table += f"<th>{c}</th>"
     table += "</tr></thead><tbody>"
 
     for i in range(rows):
-        table += "<tr>"
-
-        checked = " checked" if bool(data["Exclude"][i]) else ""
-        table += (
-            '<td class="exclude-cell">'
-            f'<input type="checkbox" class="exclude-point" '
-            f'data-row="{i}"{checked}>'
-            '</td>'
-        )
-
-        s = data["[S]0"][i]
-        table += (
-            f'<td><input class="data-input" data-col="[S]0" data-row="{i}" '
-            f'value="{fmt(s)}"></td>'
-        )
-
-        for c in data.keys():
-            if c in ("Exclude", "[S]0"):
-                continue
+        table += f"<tr><td>{i+1}</td>"
+        for c in cols:
             val = data[c][i]
-            table += (
-                f'<td><input class="data-input" data-col="{c}" data-row="{i}" '
-                f'value="{fmt(val)}"></td>'
-            )
-
+            table += f'<td><input class="data-input" data-col="{c}" data-row="{i}" value="{fmt(val)}"></td>'
         table += "</tr>"
 
     table += "</tbody></table>"
     js("#table-wrap").innerHTML = table
 
-    # Every row has its own exclusion checkbox.
-    # Capture the checkbox itself: this is more reliable with PyScript's
-    # JavaScript proxy objects than relying on e.target.
-    for cb in document.querySelectorAll(".exclude-point"):
-        row = int(cb.getAttribute("data-row"))
-        cb.onchange = lambda e, cb=cb, row=row: set_exclude(
-            row,
-            bool(cb.checked)
-        )
-
-    # Editable data cells.
     for inp in document.querySelectorAll(".data-input"):
-        inp.onchange = lambda e: set_value(
-            e.target.getAttribute("data-col"),
-            int(e.target.getAttribute("data-row")),
-            e.target.value
-        )
+        inp.onchange = lambda e: set_value(e.target.getAttribute("data-col"), int(e.target.getAttribute("data-row")), e.target.value)
 
+def set_value(h, i, value):
+    try: data[h][i] = float(str(value).replace(",", "."))
+    except: pass
 
-def set_exclude(i, value):
-    data["Exclude"][i] = bool(value)
-    # Do not rebuild the table: rebuilding would interrupt the current click.
-    # The fit routines read data["Exclude"] directly.
-
-
-def set_value(i, h, value):
-    try:
-        data[h][i] = float(str(value).replace(",", "."))
-    except:
-        pass
-
-def parse_paste():
-    text = js("#paste-input").value.strip()
-
-    if not text:
+# --- IMPORT INVISIBLE (CTRL+V & BOUTON) ---
+def process_pasted_text(text):
+    if not text.strip():
         set_status("No data pasted.")
         return
 
@@ -430,119 +267,123 @@ def parse_paste():
         lines = [line.strip() for line in text.splitlines() if line.strip()]
         rows = [line.replace(",", ".").split() for line in lines]
 
-        # Remove header if first cell is not numeric
-        try:
-            float(rows[0][0])
-        except:
-            rows = rows[1:]
+        # Ignore Header
+        try: float(rows[0][0])
+        except: rows = rows[1:]
 
-        if not rows:
-            raise ValueError("No numerical data found.")
-
-        ncol = len(rows[0])
-        if ncol < 2:
-            raise ValueError("At least [S]0 and one velocity series are required.")
-
-        if any(len(r) != ncol for r in rows):
-            raise ValueError("Rows do not all contain the same number of columns.")
-
+        if not rows: raise ValueError("No numerical data found.")
         matrix = [[float(x) for x in r] for r in rows]
-
+        
+        s_values = [r[0] for r in matrix]
+        if 0.0 not in s_values:
+            if not window.confirm("/!\\ Warning /!\\\n\nThe origin point (0,0) is missing\n\nDo you still want to proceed?"): return
+        if s_values != sorted(s_values):
+            if not window.confirm("/!\\ Warning /!\\\n\nData are not sorted from smallest to biggest\n\nDo you still want to proceed?"): return
+        
+        ncol = len(rows[0])
         data.clear()
-        data["Exclude"] = [False] * len(matrix)
         data["[S]0"] = [r[0] for r in matrix]
+        data["Exclude"] = {}
 
         for j in range(1, ncol):
-            data[f"v{j-1}"] = [r[j] for r in matrix]
+            series_name = f"v{j-1}"
+            data[series_name] = [r[j] for r in matrix]
+            data["Exclude"][series_name] = [False] * len(matrix)
 
         render_series()
         render_table()
-        set_status(f"{len(matrix)} data points loaded — {ncol-1} series.")
-
+        set_status(f"{len(matrix)} data points loaded.")
+        
     except Exception as exc:
         set_status(f"Could not read data: {exc}")
 
-def fit_data():
+async def paste_from_button(e):
     try:
-        _fit_data()
-    except Exception as exc:
-        set_status(f"MM-Fit error: {type(exc).__name__}: {exc}")
-        js("#summary").innerHTML = (
-            '<div class="summary-title">Fit error</div>'
-            f'<pre style="white-space:pre-wrap">{type(exc).__name__}: {exc}</pre>'
-        )
+        text = await window.navigator.clipboard.readText()
+        process_pasted_text(text)
+    except Exception:
+        set_status("Clipboard access blocked. Please use Ctrl+V on your keyboard.")
 
-def _fit_data():
+def paste_from_keyboard(e):
+    text = e.clipboardData.getData("text")
+    if text:
+        process_pasted_text(text)
+        e.preventDefault()
+
+# --- FENÊTRE MODALE EXCLUDE ---
+def open_exclusion_gui(e):
+    if not data.get("[S]0"): return
+    
+    v_cols = [c for c in data.keys() if c not in ("[S]0", "Exclude")]
+    rows = len(data["[S]0"])
+    
+    html = "<table><thead><tr><th>#</th><th>[S]0</th>"
+    for v in v_cols: html += f"<th colspan='2'>Series {v}</th>"
+    html += "</tr></thead><tbody>"
+    
+    for i in range(rows):
+        html += f"<tr><td><b>{i+1}</b></td><td>{fmt(data['[S]0'][i])}</td>"
+        for v in v_cols:
+            is_ex = "checked" if data["Exclude"].get(v, [False]*rows)[i] else ""
+            html += f"<td style='text-align:center;'><input type='checkbox' class='ex-cb' data-series='{v}' data-row='{i}' {is_ex}></td>"
+            html += f"<td>{fmt(data[v][i])}</td>"
+        html += "</tr>"
+    html += "</tbody></table>"
+    
+    js("#exclusion-grid-wrap").innerHTML = html
+    js("#exclusion-modal").classList.remove("hidden")
+
+def apply_exclusion(e):
+    v_cols = [c for c in data.keys() if c not in ("[S]0", "Exclude")]
+    rows = len(data["[S]0"])
+    for v in v_cols: data["Exclude"][v] = [False] * rows
+        
+    cbs = document.querySelectorAll(".ex-cb")
+    for cb in cbs:
+        if cb.checked:
+            v = cb.getAttribute("data-series")
+            row = int(cb.getAttribute("data-row"))
+            data["Exclude"][v][row] = True
+            
+    js("#exclusion-modal").classList.add("hidden")
+    fit_data()
+
+# --- MOTEUR DE FIT & PLOT ---
+def fit_data():
     series_list = selected_series()
-
-    if not series_list:
-        set_status("Select at least one series.")
-        return
+    if not series_list: return
 
     results = []
-    n = len(data["[S]0"])
-
     for series in series_list:
         s = np.asarray(data["[S]0"], dtype=float)
         v = np.asarray(data[series], dtype=float)
-        excluded = np.asarray(data["Exclude"], dtype=bool)
+        excluded = np.asarray(data["Exclude"].get(series, [False]*len(s)), dtype=bool)
 
         valid = np.isfinite(s) & np.isfinite(v) & (~excluded)
         excluded_valid = np.isfinite(s) & np.isfinite(v) & excluded
-        s_fit = s[valid]
-        v_fit = v[valid]
-        s_excluded = s[excluded_valid]
-        v_excluded = v[excluded_valid]
+        s_fit, v_fit = s[valid], v[valid]
+        s_excluded, v_excluded = s[excluded_valid], v[excluded_valid]
 
-        if len(s_fit) < 3:
-            continue
+        if len(s_fit) < 3: continue
 
         try:
-            p0 = [
-                float(np.max(v_fit)),
-                float(np.mean(s_fit[s_fit > 0])) if np.any(s_fit > 0) else 1.0
-            ]
-
-            popt, pcov = curve_fit(
-                michaelis_menten,
-                s_fit,
-                v_fit,
-                p0=p0,
-                maxfev=20000
-            )
-
+            p0 = [float(np.max(v_fit)), float(np.mean(s_fit[s_fit > 0])) if np.any(s_fit > 0) else 1.0]
+            popt, pcov = curve_fit(michaelis_menten, s_fit, v_fit, p0=p0, maxfev=20000)
             vmax, km = popt
             perr = np.sqrt(np.maximum(np.diag(pcov), 0))
-            vmax_se, km_se = perr
-
             residuals = v_fit - michaelis_menten(s_fit, vmax, km)
             ss_res = float(np.sum(residuals**2))
             ss_tot = float(np.sum((v_fit - np.mean(v_fit))**2))
             r2 = 1.0 - ss_res / ss_tot if ss_tot != 0 else 0.0
 
             results.append({
-                "series": series,
-                "s": s_fit,
-                "v": v_fit,
-                "vmax": vmax,
-                "km": km,
-                "vmax_se": vmax_se,
-                "km_se": km_se,
-                "r2": r2,
-                "s_excluded": s_excluded,
-                "v_excluded": v_excluded,
+                "series": series, "s": s_fit, "v": v_fit, "vmax": vmax, "km": km,
+                "vmax_se": perr[0], "km_se": perr[1], "r2": r2,
+                "s_excluded": s_excluded, "v_excluded": v_excluded,
             })
+        except: continue
 
-        except Exception:
-            continue
-
-    if not results:
-        set_status("No series could be fitted. Check the data and exclusions.")
-        return
-
-    # --------------------------------------------------------------
-    # Plotly: main MM graph + one separate residual panel per series
-    # --------------------------------------------------------------
+    if not results: return
 
     traces = []
     nseries = len(results)
@@ -550,343 +391,163 @@ def _fit_data():
     for i, r in enumerate(results):
         color = COLORS[i % len(COLORS)]
         marker = MARKERS[i % len(MARKERS)]
-
-        s = r["s"]
-        v = r["v"]
-        smax = float(np.max(s))
-        s_plot = np.linspace(0, smax * 1.2, 250)
+        s, v = r["s"], r["v"]
+        s_plot = np.linspace(0, float(np.max(data["[S]0"])) * 1.2, 250)
         fit = michaelis_menten(s_plot, r["vmax"], r["km"])
 
-        # Main MM plot
+        hover_template = f"<b>{r['series']}</b><br>[S]₀: %{{x:.2e}}<br>v₀: %{{y:.2e}}<extra></extra>"
+
         traces.append({
-            "x": s.tolist(),
-            "y": v.tolist(),
-            "type": "scatter",
-            "mode": "markers",
-            "name": f"Data {r['series']}",
-            "marker": {"color": color, "symbol": marker, "size": 8},
-            "xaxis": "x",
-            "yaxis": "y",
+            "x": s.tolist(), "y": v.tolist(), "type": "scatter", "mode": "markers",
+            "name": f"Data {r['series']}", "marker": {"color": color, "symbol": marker, "size": 9},
+            "hovertemplate": hover_template, "xaxis": "x", "yaxis": "y"
         })
 
-        # Explicitly show excluded points as crosses.
         if len(r["s_excluded"]) > 0:
             traces.append({
-                "x": r["s_excluded"].tolist(),
-                "y": r["v_excluded"].tolist(),
-                "type": "scatter",
-                "mode": "markers",
-                "name": f"Excluded {r['series']}",
-                "marker": {
-                    "color": color,
-                    "symbol": "x",
-                    "size": 11,
-                    "line": {"width": 2}
-                },
-                "xaxis": "x",
-                "yaxis": "y",
+                "x": r["s_excluded"].tolist(), "y": r["v_excluded"].tolist(), "type": "scatter",
+                "mode": "markers", "name": f"Excluded {r['series']}",
+                "hovertemplate": f"<b>Excluded {r['series']}</b><br>[S]₀: %{{x:.2e}}<br>v₀: %{{y:.2e}}<extra></extra>",
+                "marker": {"color": color, "symbol": "x", "size": 11, "line": {"width": 2}},
+                "xaxis": "x", "yaxis": "y", "showlegend": False
             })
 
         traces.append({
-            "x": s_plot.tolist(),
-            "y": fit.tolist(),
-            "type": "scatter",
-            "mode": "lines",
-            "name": (
-                f"Fit {r['series']} (R²={r['r2']:.3f})"
-                f"<br>Vmax={r['vmax']:.2e} ± {r['vmax_se']:.1e}"
-                f"<br>Km={r['km']:.2e} ± {r['km_se']:.1e}"
-            ),
-            "line": {"color": color, "width": 2},
-            "xaxis": "x",
-            "yaxis": "y",
+            "x": s_plot.tolist(), "y": fit.tolist(), "type": "scatter", "mode": "lines",
+            "name": f"Fit {r['series']}", "line": {"color": color, "width": 2}, "hoverinfo": "skip", "xaxis": "x", "yaxis": "y"
         })
 
-        # One independent residual panel for THIS series
         residuals = v - michaelis_menten(s, r["vmax"], r["km"])
         tolerance = 0.10 * michaelis_menten(s_plot, r["vmax"], r["km"])
-
-        row = i + 2
-        xaxis_name = f"x{row}"
-        yaxis_name = f"y{row}"
-
+        row, xaxis_name, yaxis_name = i + 2, f"x{i + 2}", f"y{i + 2}"
+        
         traces.append({
-            "x": s.tolist(),
-            "y": residuals.tolist(),
-            "type": "scatter",
-            "mode": "markers",
-            "name": f"Residuals {r['series']}",
-            "showlegend": False,
-            "marker": {"color": color, "symbol": marker, "size": 7},
-            "xaxis": xaxis_name,
-            "yaxis": yaxis_name,
+            "x": s.tolist(), "y": residuals.tolist(), "type": "scatter", "mode": "markers",
+            "showlegend": False, "marker": {"color": color, "symbol": marker, "size": 7},
+            "hovertemplate": f"Residual<br>[S]₀: %{{x:.2e}}<br>Res: %{{y:.2e}}<extra></extra>",
+            "xaxis": xaxis_name, "yaxis": yaxis_name,
         })
 
         traces.append({
             "x": s_plot.tolist() + s_plot[::-1].tolist(),
             "y": tolerance.tolist() + (-tolerance[::-1]).tolist(),
-            "type": "scatter",
-            "fill": "toself",
-            "fillcolor": color,
-            "opacity": 0.13,
-            "line": {"color": color, "width": 0},
-            "name": "±10% tolerance",
-            "showlegend": False,
-            "xaxis": xaxis_name,
-            "yaxis": yaxis_name,
+            "type": "scatter", "fill": "toself", "fillcolor": color, "opacity": 0.13,
+            "line": {"color": color, "width": 0}, "showlegend": False, "hoverinfo": "skip",
+            "xaxis": xaxis_name, "yaxis": yaxis_name,
         })
+        if len(r["s_excluded"]) > 0:
+            res_ex = r["v_excluded"] - michaelis_menten(r["s_excluded"], r["vmax"], r["km"])
+            traces.append({
+                "x": r["s_excluded"].tolist(), "y": res_ex.tolist(), "type": "scatter", "mode": "markers",
+                "showlegend": False, "marker": {"color": color, "symbol": "x", "size": 9, "line": {"width": 2}},
+                "hovertemplate": f"<b>Excluded Residual</b><br>[S]₀: %{{x:.2e}}<br>Res: %{{y:.2e}}<extra></extra>",
+                "xaxis": xaxis_name, "yaxis": yaxis_name,
+            })
 
-        traces.append({
-            "x": s_plot.tolist(),
-            "y": np.zeros_like(s_plot).tolist(),
-            "type": "scatter",
-            "mode": "lines",
-            "line": {"color": "#444", "width": 1},
-            "showlegend": False,
-            "xaxis": xaxis_name,
-            "yaxis": yaxis_name,
-        })
-
-    # Layout: main plot + one residual panel per series
-    main_height = 0.40
+    main_height = 0.45
     gap = 0.015
     residual_height = (1.0 - main_height - gap * nseries) / nseries
 
     layout = {
         "title": {"text": "Michaelis-Menten Kinetics", "font": {"size": 18}},
-        "height": 500 + 170 * nseries,
+        "height": max(500, 300 + 150 * nseries),
         "margin": {"l": 65, "r": 25, "t": 55, "b": 55},
         "legend": {"font": {"size": 11}},
-        "xaxis": {
-            "title": "[S]₀",
-            "domain": [0, 1],
-            "anchor": "y",
-            "tickformat": ".1e"
-        },
-        "yaxis": {
-            "title": "v₀",
-            "domain": [1.0 - main_height, 1.0],
-            "anchor": "x",
-            "tickformat": ".1e"
-        },
+        "hoverlabel": {"font": {"size": 13}, "namelength": -1},
+        "xaxis": {"title": "[S]₀", "domain": [0, 1], "anchor": "y", "tickformat": ".1e"},
+        "yaxis": {"title": "v₀", "domain": [1.0 - main_height, 1.0], "anchor": "x", "tickformat": ".1e"},
     }
 
-    # Add separate domains for residual panels.
     for i, r in enumerate(results):
         row = i + 2
         top = 1.0 - main_height - gap - i * (residual_height + gap)
-        bottom = top - residual_height
+        layout[f"xaxis{row}"] = {"title": "[S]₀" if i == nseries - 1 else "", "domain": [0, 1], "anchor": f"y{row}"}
+        layout[f"yaxis{row}"] = {"title": f"Res", "domain": [top - residual_height, top], "anchor": f"x{row}"}
 
-        layout[f"xaxis{row}"] = {
-            "title": "[S]₀" if i == nseries - 1 else "",
-            "domain": [0, 1],
-            "anchor": f"y{row}"
-        }
-        layout[f"yaxis{row}"] = {
-            "title": f"Residuals {r['series']}",
-            "domain": [bottom, top],
-            "anchor": f"x{row}"
-        }
+    window.Plotly.newPlot("mm-plot", window.JSON.parse(json.dumps(traces)), window.JSON.parse(json.dumps(layout)))
 
-    # JSON is a robust Python -> JavaScript bridge in Pyodide.
-    config = {
-        "responsive": True,
-        "displaylogo": False
-    }
-
-    js_traces = window.JSON.parse(json.dumps(traces))
-    js_layout = window.JSON.parse(json.dumps(layout))
-    js_config = window.JSON.parse(json.dumps(config))
-
-    window.Plotly.newPlot(
-        "mm-plot",
-        js_traces,
-        js_layout,
-        js_config
-    )
-
-    # Summary
     summary = '<div class="summary-title">Fit values</div>'
-
     for r in results:
-        vmax_rse = abs(r["vmax_se"] / r["vmax"]) * 100 if r["vmax"] != 0 else float("inf")
-        km_rse = abs(r["km_se"] / r["km"]) * 100 if r["km"] != 0 else float("inf")
-
-        summary += (
-            f"<b>{r['series']}</b> — "
-            f"Vmax = <code>{r['vmax']:.3e}</code> ± <code>{r['vmax_se']:.2e}</code> "
-            f"({vmax_rse:.0f}%) &nbsp; "
-            f"Km = <code>{r['km']:.3e}</code> ± <code>{r['km_se']:.2e}</code> "
-            f"({km_rse:.0f}%) &nbsp; "
-            f"R² = <code>{r['r2']:.4f}</code><br>"
-        )
-
+        summary += (f"<b>{r['series']}</b> — Vmax = <code>{r['vmax']:.3e}</code> &nbsp; Km = <code>{r['km']:.3e}</code> &nbsp; R² = <code>{r['r2']:.4f}</code><br>")
     js("#summary").innerHTML = summary
-    set_status(f"{len(results)} series fitted.")
 
 
-def lb_plot():
-    try:
-        series_list = selected_series()
-        if not series_list:
-            set_status("Select at least one series.")
-            return
+def lb_plot(e):
+    series_list = selected_series()
+    if not series_list: return
 
-        results = []
-        for series in series_list:
-            s = np.asarray(data["[S]0"], dtype=float)
-            v = np.asarray(data[series], dtype=float)
-            excluded = np.asarray(data["Exclude"], dtype=bool)
+    results = []
+    for series in series_list:
+        s = np.asarray(data["[S]0"], dtype=float)
+        v = np.asarray(data[series], dtype=float)
+        excluded = np.asarray(data["Exclude"].get(series, [False]*len(s)), dtype=bool)
 
-            valid = np.isfinite(s) & np.isfinite(v) & (~excluded) & (s > 0) & (v > 0)
-            x = 1.0 / s[valid]
-            y = 1.0 / v[valid]
+        valid = np.isfinite(s) & np.isfinite(v) & (~excluded) & (s > 0) & (v > 0)
+        ex_valid = np.isfinite(s) & np.isfinite(v) & excluded & (s > 0) & (v > 0)
+        
+        x, y = 1.0 / s[valid], 1.0 / v[valid]
+        x_ex, y_ex = 1.0 / s[ex_valid], 1.0 / v[ex_valid]
 
-            if len(x) < 3:
-                continue
+        if len(x) < 3: continue
+        fit = linregress(x, y)
+        if not np.isfinite(fit.slope) or fit.intercept == 0: continue
 
-            fit = linregress(x, y)
-            slope = float(fit.slope)
-            intercept = float(fit.intercept)
+        vmax, km = 1.0 / fit.intercept, fit.slope / fit.intercept
+        xmax = float(np.max(x))
+        x_intercept = -fit.intercept / fit.slope
+        xmin = min(x_intercept * 1.20, -0.10 * xmax)
+        xx = np.linspace(xmin, xmax * 1.05, 200)
 
-            if not np.isfinite(slope) or not np.isfinite(intercept) or intercept == 0:
-                continue
+        results.append({
+            "series": series, "x": x, "y": y, "xx": xx, "yy": fit.intercept + fit.slope * xx,
+            "x_ex": x_ex, "y_ex": y_ex, "vmax": vmax, "km": km, "r2": float(fit.rvalue**2)
+        })
 
-            vmax = 1.0 / intercept
-            km = slope / intercept
+    traces = []
+    for i, r in enumerate(results):
+        color = COLORS[i % len(COLORS)]
+        marker = MARKERS[i % len(MARKERS)]
+        hover_template = f"<b>{r['series']}</b><br>1/[S]₀: %{{x:.2e}}<br>1/v₀: %{{y:.2e}}<extra></extra>"
+        
+        traces.append({"x": r["x"].tolist(), "y": r["y"].tolist(), "type": "scatter", "mode": "markers", "name": f"Data {r['series']}", "hovertemplate": hover_template, "marker": {"color": color, "symbol": marker, "size": 9}})
+        if len(r["x_ex"]) > 0:
+            traces.append({"x": r["x_ex"].tolist(), "y": r["y_ex"].tolist(), "type": "scatter", "mode": "markers", "name": f"Excluded {r['series']}", "hovertemplate": f"<b>Excluded {r['series']}</b><br>1/[S]₀: %{{x:.2e}}<br>1/v₀: %{{y:.2e}}<extra></extra>", "marker": {"color": color, "symbol": "x", "size": 11, "line": {"width": 2}}, "showlegend": False})
+        traces.append({"x": r["xx"].tolist(), "y": r["yy"].tolist(), "type": "scatter", "mode": "lines", "name": f"Fit {r['series']}", "hoverinfo": "skip", "line": {"color": color, "width": 2}})
 
-            slope_se = float(fit.stderr) if fit.stderr is not None else float("nan")
-            intercept_se = float(fit.intercept_stderr) if fit.intercept_stderr is not None else float("nan")
-            vmax_se = abs(intercept_se / intercept**2)
+    layout = {
+        "title": {"text": "Lineweaver–Burk Plot", "font": {"size": 18}},
+        "height": 560, "margin": {"l": 70, "r": 25, "t": 75, "b": 65},
+        "hoverlabel": {"font": {"size": 13}, "namelength": -1},
+        "xaxis": {"title": "1 / [S]₀", "zeroline": True, "tickformat": ".1e"},
+        "yaxis": {"title": "1 / v₀", "zeroline": True, "tickformat": ".1e"},
+    }
+    window.Plotly.newPlot("mm-plot", window.JSON.parse(json.dumps(traces)), window.JSON.parse(json.dumps(layout)))
 
-            if slope != 0 and np.isfinite(slope_se) and np.isfinite(intercept_se):
-                km_se = abs(km) * np.sqrt(
-                    (slope_se / slope)**2 + (intercept_se / intercept)**2
-                )
-            else:
-                km_se = float("nan")
-
-            # Extend the regression line into the negative 1/[S] region
-            # so that the x-intercept (-1/Km) is visible.
-            x_intercept = -intercept / slope if slope != 0 else 0.0
-            xmax = float(np.max(x))
-            xmin_data = float(np.min(x))
-            xmin = min(x_intercept * 1.20, -0.10 * xmax, -0.05 * max(xmax, xmin_data))
-            if xmin >= 0:
-                xmin = -0.10 * xmax
-
-            xx = np.linspace(xmin, xmax * 1.05, 200)
-            yy = intercept + slope * xx
-
-            results.append({
-                "series": series, "x": x, "y": y,
-                "xx": xx, "yy": yy,
-                "x_intercept": x_intercept,
-                "vmax": vmax, "vmax_se": vmax_se,
-                "km": km, "km_se": km_se,
-                "r2": float(fit.rvalue**2)
-            })
-
-        if not results:
-            set_status("No valid series for LB plot. Need ≥3 positive points.")
-            return
-
-        traces=[]
-        for i,r in enumerate(results):
-            color=COLORS[i % len(COLORS)]
-            marker=MARKERS[i % len(MARKERS)]
-            traces.append({
-                "x":r["x"].tolist(),"y":r["y"].tolist(),
-                "type":"scatter","mode":"markers",
-                "name":f"Data {r['series']}",
-                "marker":{"color":color,"symbol":marker,"size":8}
-            })
-            traces.append({
-                "x":r["xx"].tolist(),"y":r["yy"].tolist(),
-                "type":"scatter","mode":"lines",
-                "name":f"Fit {r['series']}",
-                "line":{"color":color,"width":2}
-            })
-
-        annotations=[]
-        for i,r in enumerate(results):
-            annotations.append({
-                "xref":"paper","yref":"paper",
-                "x":0.01,"y":0.99-i*0.075,
-                "xanchor":"left","yanchor":"top",
-                "text":(
-                    f"<b>{r['series']}</b> — "
-                    f"Vmax={r['vmax']:.3e} ± {r['vmax_se']:.2e} &nbsp; "
-                    f"Km={r['km']:.3e} ± {r['km_se']:.2e} &nbsp; "
-                    f"R²={r['r2']:.4f}"
-                ),
-                "showarrow":False,"font":{"size":12}
-            })
-
-        layout={
-            "title":{"text":"Lineweaver–Burk Plot","font":{"size":18}},
-            "height":560,
-            "margin":{"l":70,"r":25,"t":75,"b":65},
-            "xaxis":{
-                "title":"1 / [S]₀",
-                "zeroline":True,
-                "tickformat":".1e",
-                "rangemode":"normal"
-            },
-            "yaxis":{
-                "title":"1 / v₀",
-                "zeroline":True,
-                "tickformat":".1e",
-                "rangemode":"normal"
-            },
-            "annotations":annotations,
-            "legend":{"font":{"size":11}}
-        }
-        config={"responsive":True,"displaylogo":False}
-
-        window.Plotly.newPlot(
-            "mm-plot",
-            window.JSON.parse(json.dumps(traces)),
-            window.JSON.parse(json.dumps(layout)),
-            window.JSON.parse(json.dumps(config))
-        )
-        set_status(f"{len(results)} series plotted in Lineweaver–Burk form.")
-
-    except Exception as exc:
-        set_status(f"LB error: {type(exc).__name__}: {exc}")
-
-
-def reset():
+def reset(e):
     data.clear()
     data.update({
-        "Exclude": [False, False, False, False, False],
+        "Exclude": {"v0": [False, False, False, False, False]},
         "[S]0": [0.0, 3.75e-4, 4.37e-4, 8.12e-4, 9.37e-4],
         "v0": [0.0, 4.32e-7, 4.86e-7, 5.08e-7, 5.45e-7],
     })
-
-    js("#paste-input").value = ""
     render_series()
     render_table()
-    js("#summary").innerHTML = (
-        '<div class="summary-title">Fit values</div>'
-        'Fit results will appear here.'
-    )
     window.Plotly.purge("mm-plot")
-    set_status("Paste your Excel data to begin. Check a box to exclude a point.")
 
-# ------------------------------------------------------------------
-# Events
-# ------------------------------------------------------------------
-
-js("#paste-btn").onclick = lambda e: parse_paste()
-js("#fit-btn").onclick = lambda e: fit_data()
-js("#lb-btn").onclick = lambda e: lb_plot()
-js("#reset-btn").onclick = lambda e: reset()
+# --- LIAISONS DES ÉVÉNEMENTS (EVENT LISTENERS) ---
+js("#paste-btn").addEventListener("click", create_proxy(paste_from_button))
+document.addEventListener("paste", create_proxy(paste_from_keyboard))
+js("#fit-btn").addEventListener("click", create_proxy(lambda e: fit_data()))
+js("#lb-btn").addEventListener("click", create_proxy(lb_plot))
+js("#exclusion-btn").addEventListener("click", create_proxy(open_exclusion_gui))
+js("#apply-exclusion-btn").addEventListener("click", create_proxy(apply_exclusion))
+js("#close-exclusion-btn").addEventListener("click", create_proxy(lambda e: js("#exclusion-modal").classList.add("hidden")))
+js("#print-btn").addEventListener("click", create_proxy(lambda e: window.print()))
+js("#reset-btn").addEventListener("click", create_proxy(reset))
 
 render_series()
 render_table()
 js("#loading").classList.add("hidden")
 </script>
-
 </body>
 </html>
