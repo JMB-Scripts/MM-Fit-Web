@@ -20,6 +20,10 @@ No installation is required. Calculations are performed directly in the browser 
 7. **Reset** — restore the default data.
 
 ```
+## Screenshot
+
+<img width="1703" height="944" alt="image" src="https://github.com/user-attachments/assets/dae79975-eb26-44d6-8fc1-4a44593db927" />
+
 
 ## Technology
 
