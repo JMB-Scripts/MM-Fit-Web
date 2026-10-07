@@ -11,13 +11,12 @@ Open the application in a web browser:
 No installation is required. Calculations are performed directly in the browser using PyScript/Pyodide, NumPy and SciPy.
 
 ## Workflow
-1. **Paste from Excel in the Data box**
-1. **Click on 1-Paste from Excel** — paste tab-separated kinetic data.
-2. Select the series to analyse.
-3. **2-MM-Fit** — perform Michaelis–Menten fitting and display residuals with the ±10% tolerance region.
+1. **1- Paste from Excel** — paste tab-separated kinetic data ([S]0 v01 v02 ...).
+2. **2-MM-Fit** — perform Michaelis–Menten fitting and display residuals with the ±10% tolerance region.
 4. **3-LB plot** — display the Lineweaver–Burk transformation and linear regression.
 5. Use the **Exclude** checkbox on individual data points when a point should not be included in the fit.
-6. **Reset** — restore the default data.
+6. Use the **Print report** to print the report
+7. **Reset** — restore the default data.
 
 ```
 
