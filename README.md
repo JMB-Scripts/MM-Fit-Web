@@ -1,6 +1,7 @@
 # MM-Fit Web
 
 Browser-based version of **MM-Fit**, a teaching tool for Michaelis–Menten enzyme kinetics.
+You can find a standalone version [here](https://github.com/JMB-Scripts/Michaelis-Menten)
 
 ## Use
 
