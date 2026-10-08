@@ -169,6 +169,7 @@
     <button id="lb-btn" class="action">3- LB plot</button>
     <button id="exclusion-btn" class="secondary">(4- Exclude data)</button>
     <button id="print-btn" class="utility">5- Print Report</button>
+    <button id="howto-btn" class="action">How-To-Fit</button>
     <button id="reset-btn" class="warning" style="margin-top: 20px;">Reset</button>
     <div id="status" class="status">Ready.</div>
   </div>
@@ -534,6 +535,173 @@ def reset(e):
     render_table()
     window.Plotly.purge("mm-plot")
 
+def how_to_fit_plot(e):
+    """Simulation pédagogique : Minimisation globale et trajectoire des paramètres"""
+    try:
+        np.random.seed(42)
+        s_data = np.linspace(0, 25, 15)
+        vmax_true, km_true = 100.0, 5.0
+
+        def mm_eq(s, vmax, km): return (vmax * s) / (km + s)
+        v_data = mm_eq(s_data, vmax_true, km_true) + np.random.normal(0, 4, len(s_data))
+        v_data = np.maximum(v_data, 0.5)
+
+        popt, _ = curve_fit(mm_eq, s_data, v_data, p0=[120, 10])
+        vmax_opt, km_opt = popt
+
+        # Ciblage du point d'exemple pour les calculs détaillés
+        target_idx = 7
+        target_s = s_data[target_idx]
+        target_v_exp = v_data[target_idx]
+
+        # Génération de la trajectoire d'optimisation (120 frames)
+        num_frames = 120
+        vmax_start, km_start = 30.0, 15.0
+        t = np.linspace(0, 5, num_frames - 10)
+        approche = np.exp(-t)
+        vmax_base = vmax_opt + (vmax_start - vmax_opt) * approche
+        km_base = km_opt + (km_start - km_opt) * approche
+
+        vmax_over = np.linspace(vmax_base[-1], vmax_opt + (vmax_opt * 0.08), 5)
+        km_over = np.linspace(km_base[-1], km_opt + (km_opt * 0.15), 5)
+        vmax_end = np.full(5, vmax_opt)
+        km_end = np.full(5, km_opt)
+
+        vmax_traj = np.concatenate([vmax_base, vmax_over, vmax_end])
+        km_traj = np.concatenate([km_base, km_over, km_end])
+
+        ssr_traj = np.array([np.sum((v_data - (v * s_data) / (k + s_data))**2) for v, k in zip(vmax_traj, km_traj)])
+        s_plot = np.linspace(0, max(s_data) * 1.1, 100)
+
+        # Calcul des limites pour fixer les échelles Y
+        min_vmax, max_vmax = np.min(vmax_traj), np.max(vmax_traj)
+        min_km, max_km = np.min(km_traj), np.max(km_traj)
+        min_ssr, max_ssr = np.min(ssr_traj), np.max(ssr_traj)
+
+        # Construction des frames d'animation Plotly
+        frames = []
+        steps_x = []
+
+        for frame_idx in range(num_frames):
+            vmax = vmax_traj[frame_idx]
+            km = km_traj[frame_idx]
+            v_model = (vmax * s_plot) / (km + s_plot)
+            steps_x.append(frame_idx)
+
+            # État de convergence pour le texte
+            if frame_idx < num_frames - 10:
+                status = "Descent in progress..."
+                bg_color = "white"
+                edge_color = "#ccc"
+            elif frame_idx < num_frames - 5:
+                status = "⚠️ SSR increased! Step rejected."
+                bg_color = "#ffcccc"
+                edge_color = "red"
+            else:
+                status = "✅ Convergence (Minimum reached)"
+                bg_color = "#d4edda"
+                edge_color = "green"
+
+            ssr_val = ssr_traj[frame_idx]
+            
+            # Calculs pour le panneau de détails (target point)
+            target_v_calc = (vmax * target_s) / (km + target_s)
+            residu_brut = target_v_calc - target_v_exp
+            carre_residu = residu_brut**2
+
+            detail_text = (
+                f"<b>Target point detail ([S]₀ = {target_s:.1f}):</b><br>"
+                f"v_calc = ({vmax:.1f} × {target_s:.1f}) / ({km:.1f} + {target_s:.1f}) = {target_v_calc:.1f}<br>"
+                f"v_exp = {target_v_exp:.1f}<br>"
+                f"Error = {target_v_calc:.1f} - {target_v_exp:.1f} = {residu_brut:.2f}<br>"
+                f"Error² = {carre_residu:.2f}"
+            )
+
+            frames.append({
+                "name": str(frame_idx),
+                "data": [
+                    {"x": s_data.tolist(), "y": v_data.tolist()},
+                    {"x": s_plot.tolist(), "y": v_model.tolist()},
+                    {"x": [target_s, target_s], "y": [target_v_exp, target_v_calc]},
+                    {"x": steps_x[:], "y": vmax_traj[:frame_idx+1].tolist()},
+                    {"x": steps_x[:], "y": km_traj[:frame_idx+1].tolist()},
+                    {"x": steps_x[:], "y": ssr_traj[:frame_idx+1].tolist()}
+                ],
+                "layout": {
+                    "annotations": [
+                        {
+                            "text": f"<b>Step: {frame_idx}/{num_frames-1}</b><br>{status}<br>• Vmax = {vmax:.1f}<br>• Km = {km:.1f}<br>• SSR = {ssr_val:.1f}",
+                            "xref": "paper", "yref": "paper", "x": 0.01, "y": 0.99, "xanchor": "left", "yanchor": "top",
+                            "showarrow": False, "bgcolor": bg_color, "bordercolor": edge_color, "borderwidth": 1, "font": {"size": 11}
+                        },
+                        {
+                            "text": detail_text,
+                            "xref": "paper", "yref": "paper", 
+                            "x": 0.58, "y": -0.15, "xanchor": "right", "yanchor": "top", # Déplacé dans l'espace blanc en bas
+                            "showarrow": False, "bgcolor": "#ffcccc", "bordercolor": "red", "borderwidth": 1, "font": {"size": 11}
+                        }
+                    ]
+                }
+            })
+
+        # Traces initiales (Frame 0)
+        initial_v_model = (vmax_traj[0] * s_plot) / (km_traj[0] + s_plot)
+        initial_v_calc = (vmax_traj[0] * target_s) / (km_traj[0] + target_s)
+        
+        traces = [
+            {"x": s_data.tolist(), "y": v_data.tolist(), "mode": "markers", "name": "Experimental Data", "marker": {"color": "black", "size": 8}, "xaxis": "x", "yaxis": "y"},
+            {"x": s_plot.tolist(), "y": initial_v_model.tolist(), "mode": "lines", "name": "Fitted Curve", "line": {"color": "#1f77b4", "width": 2}, "xaxis": "x", "yaxis": "y"},
+            {"x": [target_s, target_s], "y": [target_v_exp, initial_v_calc], "mode": "lines", "name": "Residual", "line": {"color": "red", "dash": "dash", "width": 2}, "xaxis": "x", "yaxis": "y"},
+            {"x": [0], "y": [vmax_traj[0]], "mode": "lines+markers", "name": "Vmax", "line": {"color": "green", "width": 2}, "xaxis": "x2", "yaxis": "y2", "showlegend": False},
+            {"x": [0], "y": [km_traj[0]], "mode": "lines+markers", "name": "Km", "line": {"color": "magenta", "width": 2}, "xaxis": "x3", "yaxis": "y3", "showlegend": False},
+            {"x": [0], "y": [ssr_traj[0]], "mode": "lines+markers", "name": "SSR", "line": {"color": "#ff7f0e", "width": 2}, "xaxis": "x4", "yaxis": "y4", "showlegend": False}
+        ]
+
+        layout = {
+            "title": {"text": "How-To-Fit : Global Error Minimization Process", "font": {"size": 18}, "y": 0.98},
+            "height": 650,
+            "margin": {"l": 55, "r": 25, "t": 60, "b": 140}, # Marge inférieure augmentée pour l'encart rouge
+            "grid": {"rows": 3, "columns": 2, "pattern": "independent"},
+            "xaxis": {"domain": [0, 0.58], "anchor": "y", "title": "[S]₀"},
+            "yaxis": {"domain": [0, 1], "anchor": "x", "title": "v₀"},
+            
+            # Affichage forcé des axes X (showline et showticklabels)
+            "xaxis2": {"domain": [0.65, 1], "anchor": "y2", "showticklabels": True, "showline": True, "linecolor": "#ccc", "range": [0, num_frames]},
+            "yaxis2": {"domain": [0.70, 1], "anchor": "x2", "title": "Vmax", "range": [min_vmax * 0.95, max_vmax * 1.05]},
+            "xaxis3": {"domain": [0.65, 1], "anchor": "y3", "showticklabels": True, "showline": True, "linecolor": "#ccc", "range": [0, num_frames]},
+            "yaxis3": {"domain": [0.35, 0.65], "anchor": "x3", "title": "Km", "range": [min_km * 0.95, max_km * 1.05]},
+            "xaxis4": {"domain": [0.65, 1], "anchor": "y4", "title": "Algorithm Step", "showticklabels": True, "showline": True, "linecolor": "#ccc", "range": [0, num_frames]},
+            "yaxis4": {"domain": [0, 0.30], "anchor": "x4", "title": "SSR Error", "range": [min_ssr * 0.9, max_ssr * 1.1]},
+            
+            "annotations": frames[0]["layout"]["annotations"],
+            
+            # Boutons Play/Pause alignés sous les petits graphiques
+            "updatemenus": [{
+                "type": "buttons", "direction": "right", "showactive": False,
+                "x": 0.65, "y": -0.15, "xanchor": "left", "yanchor": "top",
+                "buttons": [
+                    {"label": "▶ Play", "method": "animate", "args": [None, {"frame": {"duration": 60, "redraw": True}, "fromcurrent": True, "transition": {"duration": 0}}]},
+                    {"label": "⏸ Pause", "method": "animate", "args": [[None], {"frame": {"duration": 0, "redraw": False}, "mode": "immediate", "transition": {"duration": 0}}]}
+                ]
+            }],
+            # Slider aligné avec les boutons
+            "sliders": [{
+                "active": 0, "yanchor": "top", "xanchor": "left", "currentvalue": {"prefix": "Step: ", "visible": True},
+                "transition": {"duration": 0}, "pad": {"b": 10, "t": 40}, "len": 0.35, "x": 0.65, "y": -0.15,
+                "steps": [{"args": [[str(k)], {"frame": {"duration": 0, "redraw": True}, "mode": "immediate"}], "label": str(k), "method": "animate"} for k in range(num_frames)]
+            }]
+        }
+
+        config = {"responsive": True, "displaylogo": False}
+        
+        window.Plotly.newPlot("mm-plot", window.JSON.parse(json.dumps(traces)), window.JSON.parse(json.dumps(layout))).then(
+            create_proxy(lambda res: window.Plotly.addFrames("mm-plot", window.JSON.parse(json.dumps(frames))))
+        )
+        set_status("How-To-Fit simulation loaded. Click Play.")
+
+    except Exception as exc:
+        set_status(f"Simulation error: {exc}")
+
 # --- LIAISONS DES ÉVÉNEMENTS (EVENT LISTENERS) ---
 js("#paste-btn").addEventListener("click", create_proxy(paste_from_button))
 document.addEventListener("paste", create_proxy(paste_from_keyboard))
@@ -548,6 +716,7 @@ js("#reset-btn").addEventListener("click", create_proxy(reset))
 render_series()
 render_table()
 js("#loading").classList.add("hidden")
+js("#howto-btn").addEventListener("click", create_proxy(how_to_fit_plot))
 </script>
 </body>
 </html>
