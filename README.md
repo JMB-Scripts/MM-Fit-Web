@@ -15,9 +15,10 @@ No installation is required. Calculations are performed directly in the browser 
 1. **1- Paste from Excel** — paste tab-separated kinetic data ([S]0 v01 v02 ...).
 2. **2-MM-Fit** — perform Michaelis–Menten fitting and display residuals with the ±10% tolerance region.
 4. **3-LB plot** — display the Lineweaver–Burk transformation and linear regression.
-5. Use the **Exclude** checkbox on individual data points when a point should not be included in the fit.
-6. Use the **Print report** to print the report
-7. **Reset** — restore the default data.
+6. Use the **Exclude** checkbox on individual data points when a point should not be included in the fit.
+7. **Set Units** you can now add units with upperscript (^) or lowerscript (_) i.e. mol.L^-1 gives mol.L<sup>-1</sup>
+8. Use the **Print report** to print the report
+9. **Reset** — restore the default data.
 
 ## Screenshot
 
