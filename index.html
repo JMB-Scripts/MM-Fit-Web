@@ -69,7 +69,7 @@
     .loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.92); z-index: 100; font-size: 16px; }
     .hidden { display: none !important; }
 
-    /* CSS pour la fenêtre modale (Exclude Data) */
+    /* CSS pour la fenêtre modale (Exclude Data & Units) */
     .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 200; }
     .modal-content { background: white; padding: 20px; border-radius: 8px; width: 90%; max-width: 650px; max-height: 90vh; display: flex; flex-direction: column; }
     .ex-cb { transform: scale(1.2); cursor: pointer; }
@@ -143,9 +143,31 @@
   </div>
 </div>
 
+<!-- Modal Units Dialog -->
+<div id="units-modal" class="modal hidden">
+  <div class="modal-content" style="max-width: 400px;">
+    <h3>Définir les Unités</h3>
+    <p style="font-size: 12px; color: #666; margin-top: 5px;">
+      <i>Astuce : Utilisez '_' pour les indices et '^' pour les exposants.<br>Exemple : µmol.L^-1.s^-1 s'affichera µmol.L<sup>-1</sup>.s<sup>-1</sup></i>
+    </p>
+    <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
+      <label style="font-size: 14px; font-weight: bold;">Unité axe X ([S]0) : 
+        <input type="text" id="x-unit-input" style="width: 100%; padding: 7px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px;" placeholder="Ex: µM">
+      </label>
+      <label style="font-size: 14px; font-weight: bold;">Unité axe Y (v0) : 
+        <input type="text" id="y-unit-input" style="width: 100%; padding: 7px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px;" placeholder="Ex: µmol.min^-1">
+      </label>
+    </div>
+    <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+      <button id="close-units-btn" class="secondary" style="width: auto; padding: 8px 15px;">Annuler</button>
+      <button id="apply-units-btn" class="action" style="width: auto; padding: 8px 15px;">Valider</button>
+    </div>
+  </div>
+</div>
+
 <div class="header">
   <div class="title">MM-Fit</div>
-  <div class="subtitle">Michaelis-Menten enzyme kinetics analysis <span class="version-badge">v6.0</span></div>
+  <div class="subtitle">Michaelis-Menten enzyme kinetics analysis <span class="version-badge">v6.2</span></div>
 </div>
 
 <div class="layout">
@@ -168,6 +190,7 @@
     <button id="fit-btn" class="action">2- MM-Fit</button>
     <button id="lb-btn" class="action">3- LB plot</button>
     <button id="exclusion-btn" class="secondary">(4- Exclude data)</button>
+    <button id="units-btn" class="secondary">Set Units</button>
     <button id="print-btn" class="utility">5- Print Report</button>
     <button id="howto-btn" class="action">How-To-Fit</button>
     <button id="reset-btn" class="warning" style="margin-top: 20px;">Reset</button>
@@ -193,13 +216,18 @@ from pyscript import document, window
 from pyodide.ffi import create_proxy
 import asyncio
 import json
+import re
 
-# Data Model : Exclude est maintenant un dictionnaire par série
+# Data Model
 data = {
     "Exclude": {"v0": [False, False, False, False, False]},
     "[S]0": [0.0, 3.75e-4, 4.37e-4, 8.12e-4, 9.37e-4],
     "v0": [0.0, 4.32e-7, 4.86e-7, 5.08e-7, 5.45e-7],
 }
+
+# Unités globales
+x_unit = ""
+y_unit = ""
 
 MARKERS = ["circle", "diamond", "triangle-up", "square", "triangle-down", "star"]
 COLORS = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b"]
@@ -210,6 +238,13 @@ def michaelis_menten(s, vmax, km):
 def js(id): return document.querySelector(id)
 def set_status(message): js("#status").innerText = message
 def fmt(x): return f"{x:.3e}"
+
+def format_units_html(text):
+    """Convertit les ^ et _ en balises HTML pour Plotly et le DOM"""
+    if not text: return ""
+    res = re.sub(r'\^([-\d\w]+)', r'<sup>\1</sup>', text)
+    res = re.sub(r'_([-\d\w]+)', r'<sub>\1</sub>', res)
+    return res
 
 def selected_series():
     return [el.value for el in document.querySelectorAll("#series-list input[type=checkbox]") if el.checked]
@@ -268,7 +303,6 @@ def process_pasted_text(text):
         lines = [line.strip() for line in text.splitlines() if line.strip()]
         rows = [line.replace(",", ".").split() for line in lines]
 
-        # Ignore Header
         try: float(rows[0][0])
         except: rows = rows[1:]
 
@@ -311,7 +345,7 @@ def paste_from_keyboard(e):
         process_pasted_text(text)
         e.preventDefault()
 
-# --- FENÊTRE MODALE EXCLUDE ---
+# --- FENÊTRES MODALES ---
 def open_exclusion_gui(e):
     if not data.get("[S]0"): return
     
@@ -349,10 +383,29 @@ def apply_exclusion(e):
     js("#exclusion-modal").classList.add("hidden")
     fit_data()
 
+def open_units_gui(e):
+    js("#x-unit-input").value = x_unit
+    js("#y-unit-input").value = y_unit
+    js("#units-modal").classList.remove("hidden")
+
+def apply_units(e):
+    global x_unit, y_unit
+    x_unit = js("#x-unit-input").value.strip()
+    y_unit = js("#y-unit-input").value.strip()
+    js("#units-modal").classList.add("hidden")
+    if len(data.get("[S]0", [])) > 0:
+        fit_data()
+
 # --- MOTEUR DE FIT & PLOT ---
 def fit_data():
     series_list = selected_series()
     if not series_list: return
+
+    global x_unit, y_unit
+    ux = format_units_html(x_unit)
+    uy = format_units_html(y_unit)
+    ux_str = f" {ux}" if ux else ""
+    uy_str = f" {uy}" if uy else ""
 
     results = []
     for series in series_list:
@@ -396,19 +449,18 @@ def fit_data():
         s_plot = np.linspace(0, float(np.max(data["[S]0"])) * 1.2, 250)
         fit = michaelis_menten(s_plot, r["vmax"], r["km"])
 
-        hover_template = f"<b>{r['series']}</b><br>[S]₀: %{{x:.2e}}<br>v₀: %{{y:.2e}}<extra></extra>"
-
         traces.append({
             "x": s.tolist(), "y": v.tolist(), "type": "scatter", "mode": "markers",
             "name": f"Data {r['series']}", "marker": {"color": color, "symbol": marker, "size": 9},
-            "hovertemplate": hover_template, "xaxis": "x", "yaxis": "y"
+            "hovertemplate": f"<b>{r['series']}</b><br>[S]₀: %{{x:.2e}}{ux_str}<br>v₀: %{{y:.2e}}{uy_str}<extra></extra>", 
+            "xaxis": "x", "yaxis": "y"
         })
 
         if len(r["s_excluded"]) > 0:
             traces.append({
                 "x": r["s_excluded"].tolist(), "y": r["v_excluded"].tolist(), "type": "scatter",
                 "mode": "markers", "name": f"Excluded {r['series']}",
-                "hovertemplate": f"<b>Excluded {r['series']}</b><br>[S]₀: %{{x:.2e}}<br>v₀: %{{y:.2e}}<extra></extra>",
+                "hovertemplate": f"<b>Excluded {r['series']}</b><br>[S]₀: %{{x:.2e}}{ux_str}<br>v₀: %{{y:.2e}}{uy_str}<extra></extra>",
                 "marker": {"color": color, "symbol": "x", "size": 11, "line": {"width": 2}},
                 "xaxis": "x", "yaxis": "y", "showlegend": False
             })
@@ -425,7 +477,7 @@ def fit_data():
         traces.append({
             "x": s.tolist(), "y": residuals.tolist(), "type": "scatter", "mode": "markers",
             "showlegend": False, "marker": {"color": color, "symbol": marker, "size": 7},
-            "hovertemplate": f"Residual<br>[S]₀: %{{x:.2e}}<br>Res: %{{y:.2e}}<extra></extra>",
+            "hovertemplate": f"Residual<br>[S]₀: %{{x:.2e}}{ux_str}<br>Res: %{{y:.2e}}{uy_str}<extra></extra>",
             "xaxis": xaxis_name, "yaxis": yaxis_name,
         })
 
@@ -441,7 +493,7 @@ def fit_data():
             traces.append({
                 "x": r["s_excluded"].tolist(), "y": res_ex.tolist(), "type": "scatter", "mode": "markers",
                 "showlegend": False, "marker": {"color": color, "symbol": "x", "size": 9, "line": {"width": 2}},
-                "hovertemplate": f"<b>Excluded Residual</b><br>[S]₀: %{{x:.2e}}<br>Res: %{{y:.2e}}<extra></extra>",
+                "hovertemplate": f"<b>Excluded Residual</b><br>[S]₀: %{{x:.2e}}{ux_str}<br>Res: %{{y:.2e}}{uy_str}<extra></extra>",
                 "xaxis": xaxis_name, "yaxis": yaxis_name,
             })
 
@@ -455,27 +507,33 @@ def fit_data():
         "margin": {"l": 65, "r": 25, "t": 55, "b": 55},
         "legend": {"font": {"size": 11}},
         "hoverlabel": {"font": {"size": 13}, "namelength": -1},
-        "xaxis": {"title": "[S]₀", "domain": [0, 1], "anchor": "y", "tickformat": ".1e"},
-        "yaxis": {"title": "v₀", "domain": [1.0 - main_height, 1.0], "anchor": "x", "tickformat": ".1e"},
+        "xaxis": {"title": f"[S]₀ ({ux})" if ux else "[S]₀", "domain": [0, 1], "anchor": "y", "tickformat": ".1e"},
+        "yaxis": {"title": f"v₀ ({uy})" if uy else "v₀", "domain": [1.0 - main_height, 1.0], "anchor": "x", "tickformat": ".1e"},
     }
 
     for i, r in enumerate(results):
         row = i + 2
         top = 1.0 - main_height - gap - i * (residual_height + gap)
-        layout[f"xaxis{row}"] = {"title": "[S]₀" if i == nseries - 1 else "", "domain": [0, 1], "anchor": f"y{row}"}
+        layout[f"xaxis{row}"] = {"title": (f"[S]₀ ({ux})" if ux else "[S]₀") if i == nseries - 1 else "", "domain": [0, 1], "anchor": f"y{row}"}
         layout[f"yaxis{row}"] = {"title": f"Res", "domain": [top - residual_height, top], "anchor": f"x{row}"}
 
     window.Plotly.newPlot("mm-plot", window.JSON.parse(json.dumps(traces)), window.JSON.parse(json.dumps(layout)))
 
     summary = '<div class="summary-title">Fit values</div>'
     for r in results:
-        summary += (f"<b>{r['series']}</b> — Vmax = <code>{r['vmax']:.3e}</code> &nbsp; Km = <code>{r['km']:.3e}</code> &nbsp; R² = <code>{r['r2']:.4f}</code><br>")
+        summary += (f"<b>{r['series']}</b> — Vmax = <code>{r['vmax']:.3e}{uy_str}</code> &nbsp; Km = <code>{r['km']:.3e}{ux_str}</code> &nbsp; R² = <code>{r['r2']:.4f}</code><br>")
     js("#summary").innerHTML = summary
 
 
 def lb_plot(e):
     series_list = selected_series()
     if not series_list: return
+
+    global x_unit, y_unit
+    ux = format_units_html(x_unit)
+    uy = format_units_html(y_unit)
+    ux_inv_str = f" (1 / {ux})" if ux else ""
+    uy_inv_str = f" (1 / {uy})" if uy else ""
 
     results = []
     for series in series_list:
@@ -508,19 +566,19 @@ def lb_plot(e):
     for i, r in enumerate(results):
         color = COLORS[i % len(COLORS)]
         marker = MARKERS[i % len(MARKERS)]
-        hover_template = f"<b>{r['series']}</b><br>1/[S]₀: %{{x:.2e}}<br>1/v₀: %{{y:.2e}}<extra></extra>"
+        hover_template = f"<b>{r['series']}</b><br>1/[S]₀: %{{x:.2e}}{ux_inv_str}<br>1/v₀: %{{y:.2e}}{uy_inv_str}<extra></extra>"
         
         traces.append({"x": r["x"].tolist(), "y": r["y"].tolist(), "type": "scatter", "mode": "markers", "name": f"Data {r['series']}", "hovertemplate": hover_template, "marker": {"color": color, "symbol": marker, "size": 9}})
         if len(r["x_ex"]) > 0:
-            traces.append({"x": r["x_ex"].tolist(), "y": r["y_ex"].tolist(), "type": "scatter", "mode": "markers", "name": f"Excluded {r['series']}", "hovertemplate": f"<b>Excluded {r['series']}</b><br>1/[S]₀: %{{x:.2e}}<br>1/v₀: %{{y:.2e}}<extra></extra>", "marker": {"color": color, "symbol": "x", "size": 11, "line": {"width": 2}}, "showlegend": False})
+            traces.append({"x": r["x_ex"].tolist(), "y": r["y_ex"].tolist(), "type": "scatter", "mode": "markers", "name": f"Excluded {r['series']}", "hovertemplate": f"<b>Excluded {r['series']}</b><br>1/[S]₀: %{{x:.2e}}{ux_inv_str}<br>1/v₀: %{{y:.2e}}{uy_inv_str}<extra></extra>", "marker": {"color": color, "symbol": "x", "size": 11, "line": {"width": 2}}, "showlegend": False})
         traces.append({"x": r["xx"].tolist(), "y": r["yy"].tolist(), "type": "scatter", "mode": "lines", "name": f"Fit {r['series']}", "hoverinfo": "skip", "line": {"color": color, "width": 2}})
 
     layout = {
         "title": {"text": "Lineweaver–Burk Plot", "font": {"size": 18}},
         "height": 560, "margin": {"l": 70, "r": 25, "t": 75, "b": 65},
         "hoverlabel": {"font": {"size": 13}, "namelength": -1},
-        "xaxis": {"title": "1 / [S]₀", "zeroline": True, "tickformat": ".1e"},
-        "yaxis": {"title": "1 / v₀", "zeroline": True, "tickformat": ".1e"},
+        "xaxis": {"title": f"1 / [S]₀ {ux_inv_str}".strip(), "zeroline": True, "tickformat": ".1e"},
+        "yaxis": {"title": f"1 / v₀ {uy_inv_str}".strip(), "zeroline": True, "tickformat": ".1e"},
     }
     window.Plotly.newPlot("mm-plot", window.JSON.parse(json.dumps(traces)), window.JSON.parse(json.dumps(layout)))
 
@@ -535,6 +593,7 @@ def reset(e):
     render_table()
     window.Plotly.purge("mm-plot")
 
+# [Le code de how_to_fit_plot reste identique]
 def how_to_fit_plot(e):
     """Simulation pédagogique : Minimisation globale et trajectoire des paramètres"""
     try:
@@ -549,12 +608,10 @@ def how_to_fit_plot(e):
         popt, _ = curve_fit(mm_eq, s_data, v_data, p0=[120, 10])
         vmax_opt, km_opt = popt
 
-        # Ciblage du point d'exemple pour les calculs détaillés
         target_idx = 7
         target_s = s_data[target_idx]
         target_v_exp = v_data[target_idx]
 
-        # Génération de la trajectoire d'optimisation (120 frames)
         num_frames = 120
         vmax_start, km_start = 30.0, 15.0
         t = np.linspace(0, 5, num_frames - 10)
@@ -573,12 +630,10 @@ def how_to_fit_plot(e):
         ssr_traj = np.array([np.sum((v_data - (v * s_data) / (k + s_data))**2) for v, k in zip(vmax_traj, km_traj)])
         s_plot = np.linspace(0, max(s_data) * 1.1, 100)
 
-        # Calcul des limites pour fixer les échelles Y
         min_vmax, max_vmax = np.min(vmax_traj), np.max(vmax_traj)
         min_km, max_km = np.min(km_traj), np.max(km_traj)
         min_ssr, max_ssr = np.min(ssr_traj), np.max(ssr_traj)
 
-        # Construction des frames d'animation Plotly
         frames = []
         steps_x = []
 
@@ -588,63 +643,41 @@ def how_to_fit_plot(e):
             v_model = (vmax * s_plot) / (km + s_plot)
             steps_x.append(frame_idx)
 
-            # État de convergence pour le texte
             if frame_idx < num_frames - 10:
-                status = "Descent in progress..."
-                bg_color = "white"
-                edge_color = "#ccc"
+                status, bg_color, edge_color = "Descent in progress...", "white", "#ccc"
             elif frame_idx < num_frames - 5:
-                status = "⚠️ SSR increased! Step rejected."
-                bg_color = "#ffcccc"
-                edge_color = "red"
+                status, bg_color, edge_color = "⚠️ SSR increased! Step rejected.", "#ffcccc", "red"
             else:
-                status = "✅ Convergence (Minimum reached)"
-                bg_color = "#d4edda"
-                edge_color = "green"
+                status, bg_color, edge_color = "✅ Convergence (Minimum reached)", "#d4edda", "green"
 
             ssr_val = ssr_traj[frame_idx]
             
-            # Calculs pour le panneau de détails (target point)
             target_v_calc = (vmax * target_s) / (km + target_s)
             residu_brut = target_v_calc - target_v_exp
             carre_residu = residu_brut**2
 
-            detail_text = (
-                f"<b>Target point detail ([S]₀ = {target_s:.1f}):</b><br>"
-                f"v_calc = ({vmax:.1f} × {target_s:.1f}) / ({km:.1f} + {target_s:.1f}) = {target_v_calc:.1f}<br>"
-                f"v_exp = {target_v_exp:.1f}<br>"
-                f"Error = {target_v_calc:.1f} - {target_v_exp:.1f} = {residu_brut:.2f}<br>"
-                f"Error² = {carre_residu:.2f}"
-            )
+            detail_text = (f"<b>Target point detail ([S]₀ = {target_s:.1f}):</b><br>"
+                           f"v_calc = ({vmax:.1f} × {target_s:.1f}) / ({km:.1f} + {target_s:.1f}) = {target_v_calc:.1f}<br>"
+                           f"v_exp = {target_v_exp:.1f}<br>"
+                           f"Error = {target_v_calc:.1f} - {target_v_exp:.1f} = {residu_brut:.2f}<br>"
+                           f"Error² = {carre_residu:.2f}")
 
             frames.append({
                 "name": str(frame_idx),
                 "data": [
-                    {"x": s_data.tolist(), "y": v_data.tolist()},
-                    {"x": s_plot.tolist(), "y": v_model.tolist()},
+                    {"x": s_data.tolist(), "y": v_data.tolist()}, {"x": s_plot.tolist(), "y": v_model.tolist()},
                     {"x": [target_s, target_s], "y": [target_v_exp, target_v_calc]},
                     {"x": steps_x[:], "y": vmax_traj[:frame_idx+1].tolist()},
-                    {"x": steps_x[:], "y": km_traj[:frame_idx+1].tolist()},
-                    {"x": steps_x[:], "y": ssr_traj[:frame_idx+1].tolist()}
+                    {"x": steps_x[:], "y": km_traj[:frame_idx+1].tolist()}, {"x": steps_x[:], "y": ssr_traj[:frame_idx+1].tolist()}
                 ],
                 "layout": {
                     "annotations": [
-                        {
-                            "text": f"<b>Step: {frame_idx}/{num_frames-1}</b><br>{status}<br>• Vmax = {vmax:.1f}<br>• Km = {km:.1f}<br>• SSR = {ssr_val:.1f}",
-                            "xref": "paper", "yref": "paper", "x": 0.01, "y": 0.99, "xanchor": "left", "yanchor": "top",
-                            "showarrow": False, "bgcolor": bg_color, "bordercolor": edge_color, "borderwidth": 1, "font": {"size": 11}
-                        },
-                        {
-                            "text": detail_text,
-                            "xref": "paper", "yref": "paper", 
-                            "x": 0.58, "y": -0.15, "xanchor": "right", "yanchor": "top", # Déplacé dans l'espace blanc en bas
-                            "showarrow": False, "bgcolor": "#ffcccc", "bordercolor": "red", "borderwidth": 1, "font": {"size": 11}
-                        }
+                        {"text": f"<b>Step: {frame_idx}/{num_frames-1}</b><br>{status}<br>• Vmax = {vmax:.1f}<br>• Km = {km:.1f}<br>• SSR = {ssr_val:.1f}", "xref": "paper", "yref": "paper", "x": 0.01, "y": 0.99, "xanchor": "left", "yanchor": "top", "showarrow": False, "bgcolor": bg_color, "bordercolor": edge_color, "borderwidth": 1, "font": {"size": 11}},
+                        {"text": detail_text, "xref": "paper", "yref": "paper", "x": 0.58, "y": -0.15, "xanchor": "right", "yanchor": "top", "showarrow": False, "bgcolor": "#ffcccc", "bordercolor": "red", "borderwidth": 1, "font": {"size": 11}}
                     ]
                 }
             })
 
-        # Traces initiales (Frame 0)
         initial_v_model = (vmax_traj[0] * s_plot) / (km_traj[0] + s_plot)
         initial_v_calc = (vmax_traj[0] * target_s) / (km_traj[0] + target_s)
         
@@ -659,41 +692,15 @@ def how_to_fit_plot(e):
 
         layout = {
             "title": {"text": "How-To-Fit : Global Error Minimization Process", "font": {"size": 18}, "y": 0.98},
-            "height": 650,
-            "margin": {"l": 55, "r": 25, "t": 60, "b": 140}, # Marge inférieure augmentée pour l'encart rouge
-            "grid": {"rows": 3, "columns": 2, "pattern": "independent"},
-            "xaxis": {"domain": [0, 0.58], "anchor": "y", "title": "[S]₀"},
-            "yaxis": {"domain": [0, 1], "anchor": "x", "title": "v₀"},
-            
-            # Affichage forcé des axes X (showline et showticklabels)
-            "xaxis2": {"domain": [0.65, 1], "anchor": "y2", "showticklabels": True, "showline": True, "linecolor": "#ccc", "range": [0, num_frames]},
-            "yaxis2": {"domain": [0.70, 1], "anchor": "x2", "title": "Vmax", "range": [min_vmax * 0.95, max_vmax * 1.05]},
-            "xaxis3": {"domain": [0.65, 1], "anchor": "y3", "showticklabels": True, "showline": True, "linecolor": "#ccc", "range": [0, num_frames]},
-            "yaxis3": {"domain": [0.35, 0.65], "anchor": "x3", "title": "Km", "range": [min_km * 0.95, max_km * 1.05]},
-            "xaxis4": {"domain": [0.65, 1], "anchor": "y4", "title": "Algorithm Step", "showticklabels": True, "showline": True, "linecolor": "#ccc", "range": [0, num_frames]},
-            "yaxis4": {"domain": [0, 0.30], "anchor": "x4", "title": "SSR Error", "range": [min_ssr * 0.9, max_ssr * 1.1]},
-            
+            "height": 650, "margin": {"l": 55, "r": 25, "t": 60, "b": 140}, "grid": {"rows": 3, "columns": 2, "pattern": "independent"},
+            "xaxis": {"domain": [0, 0.58], "anchor": "y", "title": "[S]₀"}, "yaxis": {"domain": [0, 1], "anchor": "x", "title": "v₀"},
+            "xaxis2": {"domain": [0.65, 1], "anchor": "y2", "showticklabels": True, "showline": True, "linecolor": "#ccc", "range": [0, num_frames]}, "yaxis2": {"domain": [0.70, 1], "anchor": "x2", "title": "Vmax", "range": [min_vmax * 0.95, max_vmax * 1.05]},
+            "xaxis3": {"domain": [0.65, 1], "anchor": "y3", "showticklabels": True, "showline": True, "linecolor": "#ccc", "range": [0, num_frames]}, "yaxis3": {"domain": [0.35, 0.65], "anchor": "x3", "title": "Km", "range": [min_km * 0.95, max_km * 1.05]},
+            "xaxis4": {"domain": [0.65, 1], "anchor": "y4", "title": "Algorithm Step", "showticklabels": True, "showline": True, "linecolor": "#ccc", "range": [0, num_frames]}, "yaxis4": {"domain": [0, 0.30], "anchor": "x4", "title": "SSR Error", "range": [min_ssr * 0.9, max_ssr * 1.1]},
             "annotations": frames[0]["layout"]["annotations"],
-            
-            # Boutons Play/Pause alignés sous les petits graphiques
-            "updatemenus": [{
-                "type": "buttons", "direction": "right", "showactive": False,
-                "x": 0.65, "y": -0.15, "xanchor": "left", "yanchor": "top",
-                "buttons": [
-                    {"label": "▶ Play", "method": "animate", "args": [None, {"frame": {"duration": 60, "redraw": True}, "fromcurrent": True, "transition": {"duration": 0}}]},
-                    {"label": "⏸ Pause", "method": "animate", "args": [[None], {"frame": {"duration": 0, "redraw": False}, "mode": "immediate", "transition": {"duration": 0}}]}
-                ]
-            }],
-            # Slider aligné avec les boutons
-            "sliders": [{
-                "active": 0, "yanchor": "top", "xanchor": "left", "currentvalue": {"prefix": "Step: ", "visible": True},
-                "transition": {"duration": 0}, "pad": {"b": 10, "t": 40}, "len": 0.35, "x": 0.65, "y": -0.15,
-                "steps": [{"args": [[str(k)], {"frame": {"duration": 0, "redraw": True}, "mode": "immediate"}], "label": str(k), "method": "animate"} for k in range(num_frames)]
-            }]
+            "updatemenus": [{"type": "buttons", "direction": "right", "showactive": False, "x": 0.65, "y": -0.15, "xanchor": "left", "yanchor": "top", "buttons": [{"label": "▶ Play", "method": "animate", "args": [None, {"frame": {"duration": 60, "redraw": True}, "fromcurrent": True, "transition": {"duration": 0}}]}, {"label": "⏸ Pause", "method": "animate", "args": [[None], {"frame": {"duration": 0, "redraw": False}, "mode": "immediate", "transition": {"duration": 0}}]}]}],
+            "sliders": [{"active": 0, "yanchor": "top", "xanchor": "left", "currentvalue": {"prefix": "Step: ", "visible": True}, "transition": {"duration": 0}, "pad": {"b": 10, "t": 40}, "len": 0.35, "x": 0.65, "y": -0.15, "steps": [{"args": [[str(k)], {"frame": {"duration": 0, "redraw": True}, "mode": "immediate"}], "label": str(k), "method": "animate"} for k in range(num_frames)]}]
         }
-
-        config = {"responsive": True, "displaylogo": False}
-        
         window.Plotly.newPlot("mm-plot", window.JSON.parse(json.dumps(traces)), window.JSON.parse(json.dumps(layout))).then(
             create_proxy(lambda res: window.Plotly.addFrames("mm-plot", window.JSON.parse(json.dumps(frames))))
         )
@@ -710,6 +717,9 @@ js("#lb-btn").addEventListener("click", create_proxy(lb_plot))
 js("#exclusion-btn").addEventListener("click", create_proxy(open_exclusion_gui))
 js("#apply-exclusion-btn").addEventListener("click", create_proxy(apply_exclusion))
 js("#close-exclusion-btn").addEventListener("click", create_proxy(lambda e: js("#exclusion-modal").classList.add("hidden")))
+js("#units-btn").addEventListener("click", create_proxy(open_units_gui))
+js("#apply-units-btn").addEventListener("click", create_proxy(apply_units))
+js("#close-units-btn").addEventListener("click", create_proxy(lambda e: js("#units-modal").classList.add("hidden")))
 js("#print-btn").addEventListener("click", create_proxy(lambda e: window.print()))
 js("#reset-btn").addEventListener("click", create_proxy(reset))
 
