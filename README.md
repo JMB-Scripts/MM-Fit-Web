@@ -28,13 +28,6 @@ The web application automatically adapts to small screens. When opened on a smar
 <img width="1703" height="944" alt="image" src="https://github.com/user-attachments/assets/dae79975-eb26-44d6-8fc1-4a44593db927" />
 
 
-## Technology
 
-- HTML / CSS / JavaScript
-- PyScript / Pyodide
-- NumPy
-- SciPy
-- Plotly
-- GitHub Pages
 
 Designed for teaching enzyme kinetics in the **UGA**
