@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MM-Fit Web</title>
 
+  <script>
+    // Si l'écran devient large (ex: mode "Voir la version ordinateur" activé sur mobile)
+    if (window.innerWidth > 800) {
+        // Redirige vers la version bureau (adaptez "index.html" si votre fichier s'appelle autrement)
+        window.location.replace("index.html");
+    }
+  </script>
+  
   <!-- PyScript / Python in the browser -->
   <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
   <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
