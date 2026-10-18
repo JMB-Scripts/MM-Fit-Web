@@ -265,8 +265,8 @@ def process_and_plot_mm(e):
         window.Plotly.newPlot("plot", window.JSON.parse(json.dumps(traces)), window.JSON.parse(json.dumps(layout)), window.JSON.parse(json.dumps(config)))
         
         js("#res-text").innerHTML = (
-            f"Vmax = <span class='res-val'>{vmax:.3e}</span> ± {vmax_se:.1e}<br>"
-            f"Km &nbsp;= <span class='res-val'>{km:.3e}</span> ± {km_se:.1e}<br>"
+            f"Vmax = <span class='res-val'>{vmax:.2e}</span> ± {vmax_se:.1e}<br>"
+            f"Km &nbsp;= <span class='res-val'>{km:.2e}</span> ± {km_se:.1e}<br>"
             f"<span style='font-size:12px; color:#666;'>R² = {r2:.4f}</span>"
         )
         js("#results").classList.add("visible")
@@ -317,8 +317,8 @@ def process_and_plot_lb(e):
     window.Plotly.newPlot("plot", window.JSON.parse(json.dumps(traces)), window.JSON.parse(json.dumps(layout)), window.JSON.parse(json.dumps(config)))
     
     js("#res-text").innerHTML = (
-        f"Vmax = <span class='res-val'>{vmax:.3e}</span> ± {vmax_se:.1e}<br>"
-        f"Km &nbsp;= <span class='res-val'>{km:.3e}</span> ± {km_se:.1e}<br>"
+        f"Vmax = <span class='res-val'>{vmax:.2e}</span> ± {vmax_se:.1e}<br>"
+        f"Km &nbsp;= <span class='res-val'>{km:.2e}</span> ± {km_se:.1e}<br>"
         f"<span style='font-size:12px; color:#666;'>R² = {fit.rvalue**2:.4f}</span>"
     )
     js("#results").classList.add("visible")
