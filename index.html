@@ -363,12 +363,17 @@ def process_pasted_text(text):
     except Exception as exc:
         set_status(f"Could not read data: {exc}")
   
-  
-  def paste_from_keyboard(e):
+async def paste_from_button(e):
+    try:
+        text = await window.navigator.clipboard.readText()
+        process_pasted_text(text)
+    except Exception:
+        set_status("Clipboard access blocked. Please use Ctrl+V on your keyboard.")
+def paste_from_keyboard(e):
     text = e.clipboardData.getData("text")
     if text:
-        process_pasted_text(text)
-        e.preventDefault()
+       process_pasted_text(text)
+       e.preventDefault()
 
 # --- FENÊTRES MODALES ---
 def open_exclusion_gui(e):
