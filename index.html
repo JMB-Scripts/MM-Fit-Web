@@ -653,7 +653,7 @@ def how_to_fit_plot(e):
             if frame_idx < num_frames - 10:
                 status, bg_color, edge_color = "Descent in progress...", "white", "#ccc"
             elif frame_idx < num_frames - 5:
-                status, bg_color, edge_color = "⚠️ SSR increased! Step rejected.", "#ffcccc", "red"
+                status, bg_color, edge_color = "⚠️ Σ Squared Error increased! Step rejected.", "#ffcccc", "red"
             else:
                 status, bg_color, edge_color = "✅ Convergence (Minimum reached)", "#d4edda", "green"
 
@@ -694,7 +694,7 @@ def how_to_fit_plot(e):
             {"x": [target_s, target_s], "y": [target_v_exp, initial_v_calc], "mode": "lines", "name": "Residual", "line": {"color": "red", "dash": "dash", "width": 2}, "xaxis": "x", "yaxis": "y"},
             {"x": [0], "y": [vmax_traj[0]], "mode": "lines+markers", "name": "Vmax", "line": {"color": "green", "width": 2}, "xaxis": "x2", "yaxis": "y2", "showlegend": False},
             {"x": [0], "y": [km_traj[0]], "mode": "lines+markers", "name": "Km", "line": {"color": "magenta", "width": 2}, "xaxis": "x3", "yaxis": "y3", "showlegend": False},
-            {"x": [0], "y": [ssr_traj[0]], "mode": "lines+markers", "name": "SSR", "line": {"color": "#ff7f0e", "width": 2}, "xaxis": "x4", "yaxis": "y4", "showlegend": False}
+            {"x": [0], "y": [ssr_traj[0]], "mode": "lines+markers", "name": "Σ Squared Error", "line": {"color": "#ff7f0e", "width": 2}, "xaxis": "x4", "yaxis": "y4", "showlegend": False}
         ]
 
         layout = {
@@ -703,7 +703,7 @@ def how_to_fit_plot(e):
             "xaxis": {"domain": [0, 0.58], "anchor": "y", "title": "[S]₀"}, "yaxis": {"domain": [0, 1], "anchor": "x", "title": "v₀"},
             "xaxis2": {"domain": [0.65, 1], "anchor": "y2", "showticklabels": True, "showline": True, "linecolor": "#ccc", "range": [0, num_frames]}, "yaxis2": {"domain": [0.70, 1], "anchor": "x2", "title": "Vmax", "range": [min_vmax * 0.95, max_vmax * 1.05]},
             "xaxis3": {"domain": [0.65, 1], "anchor": "y3", "showticklabels": True, "showline": True, "linecolor": "#ccc", "range": [0, num_frames]}, "yaxis3": {"domain": [0.35, 0.65], "anchor": "x3", "title": "Km", "range": [min_km * 0.95, max_km * 1.05]},
-            "xaxis4": {"domain": [0.65, 1], "anchor": "y4", "title": "Algorithm Step", "showticklabels": True, "showline": True, "linecolor": "#ccc", "range": [0, num_frames]}, "yaxis4": {"domain": [0, 0.30], "anchor": "x4", "title": "SSR Error", "range": [min_ssr * 0.9, max_ssr * 1.1]},
+            "xaxis4": {"domain": [0.65, 1], "anchor": "y4", "title": "Algorithm Step", "showticklabels": True, "showline": True, "linecolor": "#ccc", "range": [0, num_frames]}, "yaxis4": {"domain": [0, 0.30], "anchor": "x4", "title": "Squared Error", "range": [min_ssr * 0.9, max_ssr * 1.1]},
             "annotations": frames[0]["layout"]["annotations"],
             "updatemenus": [{"type": "buttons", "direction": "right", "showactive": False, "x": 0.65, "y": -0.15, "xanchor": "left", "yanchor": "top", "buttons": [{"label": "▶ Play", "method": "animate", "args": [None, {"frame": {"duration": 60, "redraw": True}, "fromcurrent": True, "transition": {"duration": 0}}]}, {"label": "⏸ Pause", "method": "animate", "args": [[None], {"frame": {"duration": 0, "redraw": False}, "mode": "immediate", "transition": {"duration": 0}}]}]}],
             "sliders": [{"active": 0, "yanchor": "top", "xanchor": "left", "currentvalue": {"prefix": "Step: ", "visible": True}, "transition": {"duration": 0}, "pad": {"b": 10, "t": 40}, "len": 0.35, "x": 0.65, "y": -0.15, "steps": [{"args": [[str(k)], {"frame": {"duration": 0, "redraw": True}, "mode": "immediate"}], "label": str(k), "method": "animate"} for k in range(num_frames)]}]
