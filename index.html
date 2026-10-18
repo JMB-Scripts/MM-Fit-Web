@@ -307,22 +307,46 @@ def process_pasted_text(text):
         return
 
     try:
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
-        rows = [line.replace(",", ".").split() for line in lines]
-
-        try: float(rows[0][0])
-        except: rows = rows[1:]
-
-        if not rows: raise ValueError("No numerical data found.")
-        matrix = [[float(x) for x in r] for r in rows]
+        # 1. OCR text cleaning (Removes artifacts from pictures)
+        cleaned = re.sub(r'[^\d\.\,eE\-\+\t\n ]', '', text)
+        lines = [line.strip() for line in cleaned.splitlines() if line.strip()]
         
+        # 2. Parse numbers safely
+        raw_matrix = []
+        for line in lines:
+            parts = line.replace(",", ".").split()
+            nums = []
+            for p in parts:
+                try:
+                    nums.append(float(p))
+                except ValueError:
+                    pass
+            if nums:
+                raw_matrix.append(nums)
+        
+        if not raw_matrix: raise ValueError("No numerical data found.")
+        
+        # 3. Handle OCR single-column alternation (if the tablet reads line by line)
+        is_single_column = all(len(row) == 1 for row in raw_matrix)
+        matrix = []
+        if is_single_column and len(raw_matrix) > 2:
+            for i in range(0, len(raw_matrix) - 1, 2):
+                matrix.append([raw_matrix[i][0], raw_matrix[i+1][0]])
+        else:
+            matrix = raw_matrix
+            
+        if len(matrix[0]) < 2:
+            raise ValueError("Data must have at least 2 columns ([S] and v).")
+
+        # 4. Standard validation
         s_values = [r[0] for r in matrix]
         if 0.0 not in s_values:
             if not window.confirm("/!\\ Warning /!\\\n\nThe origin point (0,0) is missing\n\nDo you still want to proceed?"): return
         if s_values != sorted(s_values):
             if not window.confirm("/!\\ Warning /!\\\n\nData are not sorted from smallest to biggest\n\nDo you still want to proceed?"): return
         
-        ncol = len(rows[0])
+        # 5. Build multiple series
+        ncol = len(matrix[0])
         data.clear()
         data["[S]0"] = [r[0] for r in matrix]
         data["Exclude"] = {}
@@ -334,19 +358,13 @@ def process_pasted_text(text):
 
         render_series()
         render_table()
-        set_status(f"{len(matrix)} data points loaded.")
+        set_status(f"{len(matrix)} data points loaded from OCR.")
         
     except Exception as exc:
         set_status(f"Could not read data: {exc}")
-
-async def paste_from_button(e):
-    try:
-        text = await window.navigator.clipboard.readText()
-        process_pasted_text(text)
-    except Exception:
-        set_status("Clipboard access blocked. Please use Ctrl+V on your keyboard.")
-
-def paste_from_keyboard(e):
+  
+  
+  def paste_from_keyboard(e):
     text = e.clipboardData.getData("text")
     if text:
         process_pasted_text(text)
