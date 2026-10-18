@@ -9,6 +9,13 @@
   <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 
+  <script>
+    // Redirect back to desktop if the viewport becomes large (e.g., "Request Desktop Site")
+    if (window.innerWidth > 800) {
+        window.location.replace("index.html");
+    }
+  </script>
+
   <style>
     :root {
       --mm-green: #5DC8A2;
@@ -109,9 +116,7 @@
     <div class="enzyme"></div>
     <div class="substrate"></div>
   </div>
-  <div style="font-weight: bold; color: var(--mm-blue); font-size: 16px;">
-    Loading Python libraries...
-  </div>
+  <div style="color: var(--mm-blue); font-weight: bold; font-size: 16px;">Loading Python libraries...</div>
 </div>
 
 <div class="header">
@@ -122,7 +127,7 @@
 <div class="app-container">
   <!-- Controls Column -->
   <div class="controls-section">
-    <textarea id="data-input" class="paste-area" placeholder="Long press here to paste your data from a photo ..."></textarea>
+    <textarea id="data-input" class="paste-area" placeholder="Long press here to paste your data from a photo (OCR)..."></textarea>
     
     <div class="btn-group">
       <button id="btn-mm" class="btn-mm">MM Fit</button>
@@ -141,13 +146,6 @@
     <div id="plot"></div>
   </div>
 </div>
-
-<script>
-  // Redirect to desktop if viewport becomes large
-  if (window.innerWidth > 800) {
-      window.location.replace("index.html");
-  }
-</script>
 
 <script type="py" config='{"packages":["numpy","scipy"]}'>
 import re
