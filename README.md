@@ -11,6 +11,9 @@ Open the application in a web browser:
 
 No installation is required. Calculations are performed directly in the browser using PyScript/Pyodide, NumPy and SciPy.
 
+### 📱 Smartphone & OCR Support
+The web application automatically adapts to small screens. When opened on a smartphone, it provides a touch-optimized interface designed for the lab bench. You don't even need to type your data: just use your phone's built-in camera OCR (like Apple Live Text or Google Lens) to scan a table from a piece of paper or a computer screen, and paste it directly into the app to get your Michaelis-Menten fit instantly.
+
 ## Workflow
 1. **1- Paste from Excel** — paste tab-separated kinetic data ([S]0 v01 v02 ...).
 2. **2-MM-Fit** — perform Michaelis–Menten fitting and display residuals with the ±10% tolerance region.
