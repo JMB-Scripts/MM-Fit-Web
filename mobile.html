@@ -221,15 +221,32 @@ def process_and_plot_mm(e):
         popt, pcov = curve_fit(michaelis_menten, s, v, p0=p0, maxfev=10000)
         vmax, km = popt
         
+        # Calcul des erreurs standard (+/-)
+        perr = np.sqrt(np.maximum(np.diag(pcov), 0))
+        vmax_se, km_se = perr[0], perr[1]
+        
+        # Courbe modèle
         s_plot = np.linspace(0, np.max(s) * 1.2, 100)
         v_plot = michaelis_menten(s_plot, vmax, km)
         
+        # Résidus et R²
         v_calc = michaelis_menten(s, vmax, km)
         residuals = v - v_calc
+        ss_res = float(np.sum(residuals**2))
+        ss_tot = float(np.sum((v - np.mean(v))**2))
+        r2 = 1.0 - ss_res / ss_tot if ss_tot != 0 else 0.0
+        
+        # Cône de tolérance à 10%
+        tolerance = 0.10 * v_plot
         
         traces = [
             {"x": s.tolist(), "y": v.tolist(), "mode": "markers", "name": "Data", "marker": {"color": "#333", "size": 9}, "xaxis": "x", "yaxis": "y"},
             {"x": s_plot.tolist(), "y": v_plot.tolist(), "mode": "lines", "name": "Fit", "line": {"color": "#5DC8A2", "width": 3}, "xaxis": "x", "yaxis": "y"},
+            
+            # Cône coloré (sur l'axe y2)
+            {"x": s_plot.tolist() + s_plot[::-1].tolist(), "y": tolerance.tolist() + (-tolerance[::-1]).tolist(), "type": "scatter", "fill": "toself", "fillcolor": "#D4AC0D", "opacity": 0.15, "line": {"width": 0}, "showlegend": False, "hoverinfo": "skip", "xaxis": "x", "yaxis": "y2"},
+            
+            # Points des résidus
             {"x": s.tolist(), "y": residuals.tolist(), "mode": "markers", "name": "Residuals", "marker": {"color": "#D4AC0D", "size": 8}, "xaxis": "x", "yaxis": "y2"},
             {"x": [0, np.max(s) * 1.2], "y": [0, 0], "mode": "lines", "showlegend": False, "line": {"color": "#999", "width": 1, "dash": "dash"}, "xaxis": "x", "yaxis": "y2"}
         ]
@@ -237,14 +254,21 @@ def process_and_plot_mm(e):
         layout = {
             "margin": {"l": 65, "r": 20, "t": 30, "b": 45},
             "legend": {"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "right", "x": 1},
-            "xaxis": {"title": "[S]₀", "zeroline": True, "tickformat": ".2e"},
-            "yaxis": {"title": "v₀", "zeroline": True, "domain": [0.35, 1], "tickformat": ".2e"},
-            "yaxis2": {"title": "Residuals", "zeroline": False, "domain": [0, 0.25], "anchor": "x", "tickformat": ".2e"}
+            "xaxis": {"title": "[S]₀", "zeroline": True, "tickformat": ".2e", "fixedrange": True},
+            "yaxis": {"title": "v₀", "zeroline": True, "domain": [0.35, 1], "tickformat": ".2e", "fixedrange": True},
+            "yaxis2": {"title": "Residuals", "zeroline": False, "domain": [0, 0.25], "anchor": "x", "tickformat": ".2e", "fixedrange": True}
         }
         
-        window.Plotly.newPlot("plot", window.JSON.parse(json.dumps(traces)), window.JSON.parse(json.dumps(layout)))
+        # Désactive la barre d'outils flottante de Plotly
+        config = {"displayModeBar": False}
         
-        js("#res-text").innerHTML = f"Vmax = <span class='res-val'>{vmax:.3e}</span><br>Km &nbsp;= <span class='res-val'>{km:.3e}</span>"
+        window.Plotly.newPlot("plot", window.JSON.parse(json.dumps(traces)), window.JSON.parse(json.dumps(layout)), window.JSON.parse(json.dumps(config)))
+        
+        js("#res-text").innerHTML = (
+            f"Vmax = <span class='res-val'>{vmax:.3e}</span> ± {vmax_se:.1e}<br>"
+            f"Km &nbsp;= <span class='res-val'>{km:.3e}</span> ± {km_se:.1e}<br>"
+            f"<span style='font-size:12px; color:#666;'>R² = {r2:.4f}</span>"
+        )
         js("#results").classList.add("visible")
         
     except Exception as exc:
@@ -263,6 +287,14 @@ def process_and_plot_lb(e):
     fit = linregress(x, y)
     
     vmax, km = 1.0 / fit.intercept, fit.slope / fit.intercept
+    
+    # Estimation des erreurs pour LB
+    try:
+        vmax_se = (fit.intercept_stderr / abs(fit.intercept)) * vmax if fit.intercept != 0 else 0
+        km_se = np.sqrt((fit.stderr / fit.slope)**2 + (fit.intercept_stderr / fit.intercept)**2) * km if (fit.slope != 0 and fit.intercept != 0) else 0
+    except AttributeError:
+        vmax_se, km_se = 0, 0
+        
     x_intercept = -fit.intercept / fit.slope
     xmin = min(x_intercept * 1.20, -0.10 * np.max(x))
     xx = np.linspace(xmin, np.max(x) * 1.05, 100)
@@ -275,15 +307,22 @@ def process_and_plot_lb(e):
     
     layout = {
         "margin": {"l": 65, "r": 20, "t": 30, "b": 50},
-        "xaxis": {"title": "1 / [S]₀", "zeroline": True, "zerolinecolor": "#000", "tickformat": ".2e"},
-        "yaxis": {"title": "1 / v₀", "zeroline": True, "zerolinecolor": "#000", "tickformat": ".2e"},
+        "xaxis": {"title": "1 / [S]₀", "zeroline": True, "zerolinecolor": "#000", "tickformat": ".2e", "fixedrange": True},
+        "yaxis": {"title": "1 / v₀", "zeroline": True, "zerolinecolor": "#000", "tickformat": ".2e", "fixedrange": True},
         "legend": {"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "right", "x": 1}
     }
     
-    window.Plotly.newPlot("plot", window.JSON.parse(json.dumps(traces)), window.JSON.parse(json.dumps(layout)))
-    js("#res-text").innerHTML = f"Vmax = <span class='res-val'>{vmax:.3e}</span><br>Km &nbsp;= <span class='res-val'>{km:.3e}</span><br><span style='font-size:12px; color:#666;'>R² = {fit.rvalue**2:.4f}</span>"
+    config = {"displayModeBar": False}
+    
+    window.Plotly.newPlot("plot", window.JSON.parse(json.dumps(traces)), window.JSON.parse(json.dumps(layout)), window.JSON.parse(json.dumps(config)))
+    
+    js("#res-text").innerHTML = (
+        f"Vmax = <span class='res-val'>{vmax:.3e}</span> ± {vmax_se:.1e}<br>"
+        f"Km &nbsp;= <span class='res-val'>{km:.3e}</span> ± {km_se:.1e}<br>"
+        f"<span style='font-size:12px; color:#666;'>R² = {fit.rvalue**2:.4f}</span>"
+    )
     js("#results").classList.add("visible")
-
+    
 def clear_all(e):
     js("#data-input").value = ""
     window.Plotly.purge("plot")
