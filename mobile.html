@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>MM-Fit Mobile</title>
+
+  <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
+  <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+
+  <style>
+    :root {
+      --mm-green: #5DC8A2;
+      --mm-blue: #5B88A5;
+      --mm-warning: #D4AC0D;
+      --bg: #f4f6f7;
+    }
+    
+    body {
+      margin: 0; padding: 0; background: var(--bg);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #333; overflow-x: hidden;
+    }
+
+    /* Compact Header */
+    .header {
+      background: white; padding: 12px 15px; border-bottom: 1px solid #ddd;
+      display: flex; justify-content: space-between; align-items: center;
+      position: sticky; top: 0; z-index: 10;
+    }
+    .header h1 { margin: 0; font-size: 20px; color: var(--mm-blue); }
+    .badge { background: #2F6FB0; color: white; padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; }
+
+    /* Main Structure */
+    .app-container { display: flex; flex-direction: column; height: calc(100vh - 49px); }
+    .controls-section { padding: 15px; background: white; flex-shrink: 0; }
+    .plot-section { flex-grow: 1; min-height: 400px; padding: 10px; background: var(--bg); display: flex; flex-direction: column; }
+
+    /* Touch-optimized text area */
+    .paste-area {
+      width: 100%; height: 100px; padding: 12px; border: 2px dashed #b0bec5;
+      border-radius: 8px; font-size: 14px; margin-bottom: 15px;
+      background: #fafbfc; resize: none; box-sizing: border-box;
+    }
+    .paste-area:focus { border-color: var(--mm-blue); outline: none; background: white; }
+
+    /* Large thumb buttons */
+    .btn-group { display: flex; gap: 10px; margin-bottom: 10px; }
+    button {
+      flex: 1; border: none; border-radius: 8px; padding: 14px 10px;
+      font-size: 15px; font-weight: bold; color: white; cursor: pointer;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    button:active { transform: translateY(1px); }
+    .btn-mm { background: var(--mm-green); }
+    .btn-lb { background: var(--mm-blue); }
+    .btn-clear { background: var(--mm-warning); flex: 0.4; }
+
+    /* Results display */
+    .results-card {
+      background: white; border-radius: 8px; padding: 12px; margin-bottom: 10px;
+      border: 1px solid #ddd; font-size: 14px; display: none;
+    }
+    .results-card.visible { display: block; }
+    .res-val { font-weight: bold; color: var(--mm-blue); font-family: monospace; font-size: 15px; }
+
+    #plot { flex-grow: 1; width: 100%; border-radius: 8px; overflow: hidden; background: white; border: 1px solid #ddd; }
+
+    /* --- ENZYME ANIMATION (LOADING) --- */
+    .loading {
+      position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; 
+      justify-content: center; background: rgba(255,255,255,0.95); z-index: 100;
+    }
+    .enzyme-container {
+      position: relative; width: 60px; height: 60px; margin-bottom: 20px;
+      animation: spin 2s linear infinite;
+    }
+    .enzyme {
+      width: 0; height: 0;
+      border-right: 30px solid transparent;
+      border-top: 30px solid var(--mm-blue);
+      border-left: 30px solid var(--mm-blue);
+      border-bottom: 30px solid var(--mm-blue);
+      border-radius: 50%;
+    }
+    .substrate {
+      position: absolute; width: 14px; height: 14px;
+      background: var(--mm-green); border-radius: 50%;
+      top: 23px; right: -5px;
+    }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    .hidden { display: none !important; }
+
+    /* --- RESPONSIVE: LANDSCAPE MODE --- */
+    @media (orientation: landscape) {
+      .app-container { flex-direction: row; height: calc(100vh - 49px); }
+      .controls-section { width: 35%; height: 100%; overflow-y: auto; border-right: 1px solid #ddd; }
+      .plot-section { width: 65%; height: 100%; padding: 15px; }
+      .paste-area { height: 140px; }
+      .btn-group { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="loading" class="loading">
+  <div class="enzyme-container">
+    <div class="enzyme"></div>
+    <div class="substrate"></div>
+  </div>
+  <div style="font-weight: bold; color: var(--mm-blue); font-size: 16px;">
+    Loading Python libraries...
+  </div>
+</div>
+
+<div class="header">
+  <h1>MM-Fit <span style="font-weight: 300;">Mobile</span></h1>
+  <span class="badge">OCR Scanner</span>
+</div>
+
+<div class="app-container">
+  <!-- Controls Column -->
+  <div class="controls-section">
+    <textarea id="data-input" class="paste-area" placeholder="Long press here to paste your data from a photo ..."></textarea>
+    
+    <div class="btn-group">
+      <button id="btn-mm" class="btn-mm">MM Fit</button>
+      <button id="btn-lb" class="btn-lb">LB Plot</button>
+      <button id="btn-clear" class="btn-clear">🗑️</button>
+    </div>
+
+    <div id="results" class="results-card">
+      <div style="margin-bottom: 5px; color: #666; font-size: 12px; text-transform: uppercase;">Model Results</div>
+      <div id="res-text"></div>
+    </div>
+  </div>
+
+  <!-- Plot Column -->
+  <div class="plot-section">
+    <div id="plot"></div>
+  </div>
+</div>
+
+<script>
+  // Redirect to desktop if viewport becomes large
+  if (window.innerWidth > 800) {
+      window.location.replace("index.html");
+  }
+</script>
+
+<script type="py" config='{"packages":["numpy","scipy"]}'>
+import re
+import numpy as np
+from scipy.optimize import curve_fit
+from scipy.stats import linregress
+from pyscript import document, window
+from pyodide.ffi import create_proxy
+import json
+
+def js(id): return document.querySelector(id)
+
+def michaelis_menten(s, vmax, km):
+    return (vmax * s) / (km + s)
+
+def parse_ocr_data(raw_text):
+    """
+    Highly tolerant Anti-OCR parser.
+    1. Cleans artifact characters.
+    2. Handles single-column alternation generated by OCR.
+    """
+    cleaned = re.sub(r'[^\d\.\,eE\-\+\t\n ]', '', raw_text)
+    
+    lines = [line.strip() for line in cleaned.splitlines() if line.strip()]
+    parsed_matrix = []
+    
+    for line in lines:
+        parts = line.replace(',', '.').split()
+        nums = []
+        for p in parts:
+            try:
+                nums.append(float(p))
+            except ValueError:
+                pass
+        if nums:
+            parsed_matrix.append(nums)
+            
+    if not parsed_matrix:
+        return [], []
+
+    is_single_column = all(len(row) == 1 for row in parsed_matrix)
+    s_vals, v_vals = [], []
+    
+    if is_single_column and len(parsed_matrix) > 2:
+        for i in range(0, len(parsed_matrix) - 1, 2):
+            s_vals.append(parsed_matrix[i][0])
+            v_vals.append(parsed_matrix[i+1][0])
+    else:
+        for row in parsed_matrix:
+            if len(row) >= 2:
+                s_vals.append(row[0])
+                v_vals.append(row[1])
+                
+    if s_vals:
+        sorted_pairs = sorted(zip(s_vals, v_vals))
+        s_vals, v_vals = zip(*sorted_pairs)
+        
+    return np.array(s_vals), np.array(v_vals)
+
+def process_and_plot_mm(e):
+    raw_text = js("#data-input").value
+    if not raw_text:
+        window.alert("Please paste data.")
+        return
+        
+    s, v = parse_ocr_data(raw_text)
+    if len(s) < 3:
+        window.alert("Insufficient or unreadable data.")
+        return
+        
+    try:
+        p0 = [float(np.max(v)), float(np.mean(s[s > 0])) if np.any(s > 0) else 1.0]
+        popt, pcov = curve_fit(michaelis_menten, s, v, p0=p0, maxfev=10000)
+        vmax, km = popt
+        
+        s_plot = np.linspace(0, np.max(s) * 1.2, 100)
+        v_plot = michaelis_menten(s_plot, vmax, km)
+        
+        v_calc = michaelis_menten(s, vmax, km)
+        residuals = v - v_calc
+        
+        traces = [
+            {"x": s.tolist(), "y": v.tolist(), "mode": "markers", "name": "Data", "marker": {"color": "#333", "size": 9}, "xaxis": "x", "yaxis": "y"},
+            {"x": s_plot.tolist(), "y": v_plot.tolist(), "mode": "lines", "name": "Fit", "line": {"color": "#5DC8A2", "width": 3}, "xaxis": "x", "yaxis": "y"},
+            {"x": s.tolist(), "y": residuals.tolist(), "mode": "markers", "name": "Residuals", "marker": {"color": "#D4AC0D", "size": 8}, "xaxis": "x", "yaxis": "y2"},
+            {"x": [0, np.max(s) * 1.2], "y": [0, 0], "mode": "lines", "showlegend": False, "line": {"color": "#999", "width": 1, "dash": "dash"}, "xaxis": "x", "yaxis": "y2"}
+        ]
+        
+        layout = {
+            "margin": {"l": 65, "r": 20, "t": 30, "b": 45},
+            "legend": {"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "right", "x": 1},
+            "xaxis": {"title": "[S]₀", "zeroline": True, "tickformat": ".2e"},
+            "yaxis": {"title": "v₀", "zeroline": True, "domain": [0.35, 1], "tickformat": ".2e"},
+            "yaxis2": {"title": "Residuals", "zeroline": False, "domain": [0, 0.25], "anchor": "x", "tickformat": ".2e"}
+        }
+        
+        window.Plotly.newPlot("plot", window.JSON.parse(json.dumps(traces)), window.JSON.parse(json.dumps(layout)))
+        
+        js("#res-text").innerHTML = f"Vmax = <span class='res-val'>{vmax:.3e}</span><br>Km &nbsp;= <span class='res-val'>{km:.3e}</span>"
+        js("#results").classList.add("visible")
+        
+    except Exception as exc:
+        window.alert(f"Fitting error: {exc}")
+
+def process_and_plot_lb(e):
+    raw_text = js("#data-input").value
+    if not raw_text: return
+    s, v = parse_ocr_data(raw_text)
+    
+    valid = (s > 0) & (v > 0)
+    s, v = s[valid], v[valid]
+    if len(s) < 3: return
+    
+    x, y = 1.0 / s, 1.0 / v
+    fit = linregress(x, y)
+    
+    vmax, km = 1.0 / fit.intercept, fit.slope / fit.intercept
+    x_intercept = -fit.intercept / fit.slope
+    xmin = min(x_intercept * 1.20, -0.10 * np.max(x))
+    xx = np.linspace(xmin, np.max(x) * 1.05, 100)
+    yy = fit.intercept + fit.slope * xx
+    
+    traces = [
+        {"x": x.tolist(), "y": y.tolist(), "mode": "markers", "name": "Data", "marker": {"color": "#333", "size": 10}},
+        {"x": xx.tolist(), "y": yy.tolist(), "mode": "lines", "name": "Linear Fit", "line": {"color": "#5B88A5", "width": 3}}
+    ]
+    
+    layout = {
+        "margin": {"l": 65, "r": 20, "t": 30, "b": 50},
+        "xaxis": {"title": "1 / [S]₀", "zeroline": True, "zerolinecolor": "#000", "tickformat": ".2e"},
+        "yaxis": {"title": "1 / v₀", "zeroline": True, "zerolinecolor": "#000", "tickformat": ".2e"},
+        "legend": {"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "right", "x": 1}
+    }
+    
+    window.Plotly.newPlot("plot", window.JSON.parse(json.dumps(traces)), window.JSON.parse(json.dumps(layout)))
+    js("#res-text").innerHTML = f"Vmax = <span class='res-val'>{vmax:.3e}</span><br>Km &nbsp;= <span class='res-val'>{km:.3e}</span><br><span style='font-size:12px; color:#666;'>R² = {fit.rvalue**2:.4f}</span>"
+    js("#results").classList.add("visible")
+
+def clear_all(e):
+    js("#data-input").value = ""
+    window.Plotly.purge("plot")
+    js("#results").classList.remove("visible")
+
+js("#btn-mm").addEventListener("click", create_proxy(process_and_plot_mm))
+js("#btn-lb").addEventListener("click", create_proxy(process_and_plot_lb))
+js("#btn-clear").addEventListener("click", create_proxy(clear_all))
+
+js("#loading").classList.add("hidden")
+
+def on_resize(e):
+    if js("#results").classList.contains("visible"):
+        window.Plotly.Plots.resize(js("plot"))
+
+window.addEventListener("resize", create_proxy(on_resize))
+</script>
+</body>
+</html>
