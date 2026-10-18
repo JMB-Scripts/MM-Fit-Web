@@ -6,10 +6,9 @@
   <title>MM-Fit Web</title>
 
   <script>
-    // Si l'écran devient large (ex: mode "Voir la version ordinateur" activé sur mobile)
-    if (window.innerWidth > 800) {
-        // Redirige vers la version bureau (adaptez "index.html" si votre fichier s'appelle autrement)
-        window.location.replace("index.html");
+    // Redirect to the mobile version if the screen is small
+    if (window.innerWidth <= 800 && !window.location.href.includes("mobile.html")) {
+        window.location.replace("mobile.html");
     }
   </script>
   
