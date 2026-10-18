@@ -244,7 +244,7 @@ def michaelis_menten(s, vmax, km):
 
 def js(id): return document.querySelector(id)
 def set_status(message): js("#status").innerText = message
-def fmt(x): return f"{x:.3e}"
+def fmt(x): return f"{x:.2e}"
 
 def format_units_html(text):
     """Convertit les ^ et _ en balises HTML pour Plotly et le DOM"""
@@ -528,7 +528,7 @@ def fit_data():
 
     summary = '<div class="summary-title">Fit values</div>'
     for r in results:
-        summary += (f"<b>{r['series']}</b> — Vmax = <code>{r['vmax']:.3e}{uy_str}</code> &nbsp; Km = <code>{r['km']:.3e}{ux_str}</code> &nbsp; R² = <code>{r['r2']:.4f}</code><br>")
+        summary += (f"<b>{r['series']}</b> — Vmax = <code>{r['vmax']:.2e}{uy_str}</code> &nbsp; Km = <code>{r['km']:.2e}{ux_str}</code> &nbsp; R² = <code>{r['r2']:.4f}</code><br>")
     js("#summary").innerHTML = summary
 
 
