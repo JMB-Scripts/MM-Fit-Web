@@ -40,7 +40,7 @@
     .badge { background: #2F6FB0; color: white; padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; }
 
     /* Main Structure */
-    .app-container { display: flex; flex-direction: column; height: calc(100vh - 49px); }
+    .app-container { display: flex; flex-direction: column; min-height: calc(100vh - 49px); }
     .controls-section { padding: 15px; background: white; flex-shrink: 0; }
     .plot-section { flex-grow: 1; min-height: 400px; padding: 10px; background: var(--bg); display: flex; flex-direction: column; }
 
@@ -72,7 +72,31 @@
     .results-card.visible { display: block; }
     .res-val { font-weight: bold; color: var(--mm-blue); font-family: monospace; font-size: 15px; }
 
-    #plot { flex-grow: 1; width: 100%; border-radius: 8px; overflow: hidden; background: white; border: 1px solid #ddd; }
+    .btn-ex { background: #708090; width: 100%; margin-bottom: 15px; padding: 10px; font-size: 14px; }
+
+    /* Exclude Data modal */
+    .modal {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 50;
+      display: flex; align-items: center; justify-content: center; padding: 16px;
+    }
+    .modal-content {
+      background: white; border-radius: 10px; padding: 15px; width: 100%; max-width: 420px;
+      max-height: 85vh; display: flex; flex-direction: column; box-sizing: border-box;
+    }
+    .modal-content h3 { margin: 0 0 5px; color: var(--mm-blue); font-size: 17px; }
+    .modal-hint { font-size: 12px; color: #666; margin-bottom: 8px; }
+    .ex-wrap { overflow: auto; flex: 1; border: 1px solid #ddd; border-radius: 6px; }
+    .ex-wrap table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .ex-wrap th { position: sticky; top: 0; background: #eef2f5; padding: 8px 4px; }
+    .ex-wrap td { border-top: 1px solid #eee; padding: 8px 4px; text-align: center; font-family: monospace; }
+    .ex-wrap td.outlier { color: red; font-weight: bold; }
+    .ex-wrap input[type=checkbox] { width: 20px; height: 20px; }
+    .ex-cell { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+    .ex-wrap td.outlier span { color: red; font-weight: bold; }
+    .modal-btns { display: flex; gap: 10px; margin-top: 12px; }
+    .btn-cancel { background: #708090; }
+
+    #plot { height: max(480px, 78vh); flex-shrink: 0; width: 100%; border-radius: 8px; overflow: hidden; background: white; border: 1px solid #ddd; }
 
     /* --- ENZYME ANIMATION (LOADING) --- */
     .loading {
@@ -101,9 +125,10 @@
 
     /* --- RESPONSIVE: LANDSCAPE MODE --- */
     @media (orientation: landscape) {
-      .app-container { flex-direction: row; height: calc(100vh - 49px); }
+      .app-container { flex-direction: row; height: calc(100vh - 49px); min-height: 0; }
       .controls-section { width: 35%; height: 100%; overflow-y: auto; border-right: 1px solid #ddd; }
-      .plot-section { width: 65%; height: 100%; padding: 15px; }
+      .plot-section { width: 65%; height: 100%; padding: 15px; box-sizing: border-box; }
+      #plot { height: 100%; flex-grow: 1; }
       .paste-area { height: 140px; }
       .btn-group { flex-direction: column; }
     }
@@ -120,7 +145,7 @@
 </div>
 
 <div class="header">
-  <h1>MM-Fit <span style="font-weight: 300;">Mobile</span></h1>
+  <h1>MM-Fit <span style="font-weight: 300;">Mobile</span> <span style="font-weight: 300; font-size: 0.6em;">v6.7</span></h1>
   <span class="badge">OCR Scanner</span>
 </div>
 
@@ -134,6 +159,7 @@
       <button id="btn-lb" class="btn-lb">LB Plot</button>
       <button id="btn-clear" class="btn-clear">🗑️</button>
     </div>
+    <button id="btn-ex" class="btn-ex">Exclude data</button>
 
     <div id="results" class="results-card">
       <div style="margin-bottom: 5px; color: #666; font-size: 12px; text-transform: uppercase;">Model Results</div>
@@ -144,6 +170,19 @@
   <!-- Plot Column -->
   <div class="plot-section">
     <div id="plot"></div>
+  </div>
+</div>
+
+<!-- Exclude Data modal -->
+<div id="ex-modal" class="modal hidden">
+  <div class="modal-content">
+    <h3>Exclude Data Points</h3>
+    <div class="modal-hint">Check the points to exclude from the fit (per series). Values in <b style="color:red;">red</b> are outside the ±10% cone of the last MM fit.</div>
+    <div id="ex-wrap" class="ex-wrap"></div>
+    <div class="modal-btns">
+      <button id="btn-ex-cancel" class="btn-cancel">Cancel</button>
+      <button id="btn-ex-apply" class="btn-mm">Apply and Re-Fit</button>
+    </div>
   </div>
 </div>
 
@@ -161,17 +200,23 @@ def js(id): return document.querySelector(id)
 def michaelis_menten(s, vmax, km):
     return (vmax * s) / (km + s)
 
+COLORS = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b"]
+MARKERS = ["circle", "diamond", "triangle-up", "square", "triangle-down", "star"]
+MAX_SERIES = len(COLORS)
+
 def parse_ocr_data(raw_text):
     """
     Highly tolerant Anti-OCR parser.
     1. Cleans artifact characters.
     2. Handles single-column alternation generated by OCR.
+    Returns (s, V, n_skipped): s = [S]0 (n,), V = v0 series (n, k), in pasted order.
+    The header is removed beforehand in load_data(); sorting is done there too.
     """
     cleaned = re.sub(r'[^\d\.\,eE\-\+\t\n ]', '', raw_text)
-    
+
     lines = [line.strip() for line in cleaned.splitlines() if line.strip()]
     parsed_matrix = []
-    
+
     for line in lines:
         parts = line.replace(',', '.').split()
         nums = []
@@ -182,161 +227,345 @@ def parse_ocr_data(raw_text):
                 pass
         if nums:
             parsed_matrix.append(nums)
-            
+
     if not parsed_matrix:
-        return [], []
+        return np.array([]), np.zeros((0, 1)), 0
 
     is_single_column = all(len(row) == 1 for row in parsed_matrix)
-    s_vals, v_vals = [], []
-    
     if is_single_column and len(parsed_matrix) > 2:
-        for i in range(0, len(parsed_matrix) - 1, 2):
-            s_vals.append(parsed_matrix[i][0])
-            v_vals.append(parsed_matrix[i+1][0])
+        rows = [[parsed_matrix[i][0], parsed_matrix[i+1][0]] for i in range(0, len(parsed_matrix) - 1, 2)]
+        n_skipped = 0
     else:
-        for row in parsed_matrix:
-            if len(row) >= 2:
-                s_vals.append(row[0])
-                v_vals.append(row[1])
-                
-    if s_vals:
-        sorted_pairs = sorted(zip(s_vals, v_vals))
-        s_vals, v_vals = zip(*sorted_pairs)
-        
-    return np.array(s_vals), np.array(v_vals)
+        # Number of columns = most frequent row length (>= 2); shorter rows are skipped
+        lengths = [len(r) for r in parsed_matrix if len(r) >= 2]
+        if not lengths:
+            return np.array([]), np.zeros((0, 1)), 0
+        ncol = max(set(lengths), key=lengths.count)
+        rows = [r[:ncol] for r in parsed_matrix if len(r) >= ncol]
+        n_skipped = len(parsed_matrix) - len(rows)
 
-def process_and_plot_mm(e):
+    m = np.array(rows, dtype=float)
+    return m[:, 0], m[:, 1:], n_skipped
+
+def load_data():
+    """Read the pasted text and run the same checks as v6.7.
+    Returns (s, V) sorted by [S]0, or None if the user cancels / no data."""
     raw_text = js("#data-input").value
-    if not raw_text:
-        window.alert("Please paste data.")
-        return
-        
-    s, v = parse_ocr_data(raw_text)
+    if not raw_text or not raw_text.strip():
+        window.alert("/!\\ Warning /!\\\n\nThe paste area is empty.\n\nPaste your data first.")
+        return None
+
+    # Header detection: if the first cell is not a number, skip the first line.
+    # Done BEFORE OCR cleaning, otherwise "[S]0 v0" would become "0 0".
+    lines = [line for line in raw_text.splitlines() if line.strip()]
+    try:
+        float(lines[0].strip().split()[0].replace(",", "."))
+    except ValueError:
+        lines = lines[1:]
+        if not lines:
+            window.alert("/!\\ No Data /!\\\n\nHeader detected, but no data rows found.")
+            return None
+
+    s, V, n_skipped = parse_ocr_data("\n".join(lines))
     if len(s) < 3:
         window.alert("Insufficient or unreadable data.")
+        return None
+    if n_skipped:
+        window.alert(f"/!\\ Warning /!\\\n\n{n_skipped} incomplete line(s) ignored (missing values).")
+    if V.shape[1] > MAX_SERIES:
+        window.alert(f"/!\\ Warning /!\\\n\n{V.shape[1]} series found: only the first {MAX_SERIES} are used on mobile.")
+        V = V[:, :MAX_SERIES]
+
+    if not np.any(s == 0.0):
+        if not window.confirm("/!\\ Warning /!\\\n\nThe origin point (0,0) is missing\n\nDo you still want to proceed?"):
+            return None
+    if np.any(np.diff(s) < 0):
+        if not window.confirm("/!\\ Warning /!\\\n\nData are not sorted from smallest to biggest\n\nDo you still want to proceed?"):
+            return None
+        order = np.argsort(s, kind="stable")
+        s, V = s[order], V[order]
+    return s, V
+
+# Current dataset + exclusions (kept as long as the pasted text does not change)
+state = {"text": None, "s": None, "V": None, "excluded": None, "fits": {}, "mode": "mm"}
+
+def get_dataset():
+    """Return (s, V, excluded). Re-parses (with checks) only if the text changed."""
+    text = js("#data-input").value
+    if state["s"] is not None and text == state["text"]:
+        return state["s"], state["V"], state["excluded"]
+    loaded = load_data()
+    if loaded is None:
+        return None
+    s, V = loaded
+    state.update({"text": text, "s": s, "V": V, "excluded": np.zeros(V.shape, dtype=bool), "fits": {}})
+    return state["s"], state["V"], state["excluded"]
+
+def fmt_pm(val, se):
+    """'1.23e-06 ± 4.5e-08 (4%)' as in v6.7 legends."""
+    rse = abs(se / val) * 100 if val != 0 and np.isfinite(se) else float("inf")
+    rse_txt = f"{rse:.0f}%" if np.isfinite(rse) else "∞"
+    return f"<span class='res-val'>{val:.2e}</span> ± {se:.1e} ({rse_txt})"
+
+def series_name(j): return f"v{j}"
+
+def show_results(rows, note=""):
+    """rows: list of (j, vmax, vmax_se, km, km_se, r2)."""
+    html = ""
+    for (j, vmax, vmax_se, km, km_se, r2) in rows:
+        color = COLORS[j % len(COLORS)]
+        html += (f"<div style='margin-bottom:6px;'><b style='color:{color};'>● {series_name(j)}</b> "
+                 f"<span style='font-size:12px; color:#666;'>R² = {r2:.3f}</span><br>"
+                 f"Vmax = {fmt_pm(vmax, vmax_se)}<br>Km &nbsp;= {fmt_pm(km, km_se)}</div>")
+    if note:
+        html += f"<div style='font-size:12px; color:#666;'>{note}</div>"
+    js("#res-text").innerHTML = html
+    js("#results").classList.add("visible")
+
+def excluded_note(excluded):
+    n_ex = int(np.sum(excluded))
+    return f"{n_ex} point(s) excluded" if n_ex else ""
+
+def process_and_plot_mm(e):
+    ds = get_dataset()
+    if ds is None:
         return
-        
-    try:
-        p0 = [float(np.max(v)), float(np.mean(s[s > 0])) if np.any(s > 0) else 1.0]
-        popt, pcov = curve_fit(michaelis_menten, s, v, p0=p0, maxfev=10000)
+    s_all, V, excluded = ds
+    state["mode"] = "mm"
+    nser = V.shape[1]
+    s_max = float(np.max(s_all))
+    s_plot = np.linspace(0, s_max * 1.2, 100)
+    multi = nser > 1
+
+    traces, rows, failed = [], [], []
+    state["fits"] = {}
+    for j in range(nser):
+        color, marker, name = COLORS[j % len(COLORS)], MARKERS[j % len(MARKERS)], series_name(j)
+        ok = np.isfinite(V[:, j])
+        use = ok & ~excluded[:, j]
+        ex = ok & excluded[:, j]
+        s, v = s_all[use], V[use, j]
+        s_ex, v_ex = s_all[ex], V[ex, j]
+        if len(s) < 3:
+            failed.append(f"{name}: fewer than 3 points")
+            continue
+        try:
+            p0 = [float(np.max(v)), float(np.mean(s[s > 0])) if np.any(s > 0) else 1.0]
+            popt, pcov = curve_fit(michaelis_menten, s, v, p0=p0, maxfev=10000)
+        except Exception as exc:
+            failed.append(f"{name}: {exc}")
+            continue
         vmax, km = popt
-        
-        # Calcul des erreurs standard (+/-)
+        state["fits"][j] = (vmax, km)
         perr = np.sqrt(np.maximum(np.diag(pcov), 0))
-        vmax_se, km_se = perr[0], perr[1]
-        
-        # Courbe modèle
-        s_plot = np.linspace(0, np.max(s) * 1.2, 100)
-        v_plot = michaelis_menten(s_plot, vmax, km)
-        
-        # Résidus et R²
+
         v_calc = michaelis_menten(s, vmax, km)
         residuals = v - v_calc
         ss_res = float(np.sum(residuals**2))
         ss_tot = float(np.sum((v - np.mean(v))**2))
         r2 = 1.0 - ss_res / ss_tot if ss_tot != 0 else 0.0
-        
-        # Cône de tolérance à 10%
+        rows.append((j, vmax, perr[0], km, perr[1], r2))
+
+        v_plot = michaelis_menten(s_plot, vmax, km)
         tolerance = 0.10 * v_plot
-        
-        traces = [
-            {"x": s.tolist(), "y": v.tolist(), "mode": "markers", "name": "Data", "marker": {"color": "#333", "size": 9}, "xaxis": "x", "yaxis": "y"},
-            {"x": s_plot.tolist(), "y": v_plot.tolist(), "mode": "lines", "name": "Fit", "line": {"color": "#5DC8A2", "width": 3}, "xaxis": "x", "yaxis": "y"},
-            
-            # Cône coloré (sur l'axe y2)
-            {"x": s_plot.tolist() + s_plot[::-1].tolist(), "y": tolerance.tolist() + (-tolerance[::-1]).tolist(), "type": "scatter", "fill": "toself", "fillcolor": "#D4AC0D", "opacity": 0.15, "line": {"width": 0}, "showlegend": False, "hoverinfo": "skip", "xaxis": "x", "yaxis": "y2"},
-            
-            # Points des résidus
-            {"x": s.tolist(), "y": residuals.tolist(), "mode": "markers", "name": "Residuals", "marker": {"color": "#D4AC0D", "size": 8}, "xaxis": "x", "yaxis": "y2"},
-            {"x": [0, np.max(s) * 1.2], "y": [0, 0], "mode": "lines", "showlegend": False, "line": {"color": "#999", "width": 1, "dash": "dash"}, "xaxis": "x", "yaxis": "y2"}
+        pt_color = color if multi else "#333"
+        res_color = color if multi else "#D4AC0D"
+        cone_color = color if multi else "#D4AC0D"
+        fit_color = color if multi else "#5DC8A2"
+
+        traces += [
+            {"x": s.tolist(), "y": v.tolist(), "mode": "markers", "name": name if multi else "Data", "legendgroup": name,
+             "marker": {"color": pt_color, "symbol": marker, "size": 9}, "xaxis": "x", "yaxis": "y"},
+            {"x": s_plot.tolist(), "y": v_plot.tolist(), "mode": "lines", "name": "Fit", "legendgroup": name, "showlegend": not multi,
+             "line": {"color": fit_color, "width": 3 if not multi else 2}, "hoverinfo": "skip", "xaxis": "x", "yaxis": "y"},
+            # ±10% cone (residual panel)
+            {"x": s_plot.tolist() + s_plot[::-1].tolist(), "y": tolerance.tolist() + (-tolerance[::-1]).tolist(), "type": "scatter",
+             "fill": "toself", "fillcolor": cone_color, "opacity": 0.15 if not multi else 0.10, "line": {"width": 0},
+             "showlegend": False, "hoverinfo": "skip", "legendgroup": name, "xaxis": "x", "yaxis": "y2"},
+            {"x": s.tolist(), "y": residuals.tolist(), "mode": "markers", "name": "Residuals", "legendgroup": name, "showlegend": not multi,
+             "marker": {"color": res_color, "symbol": marker, "size": 8},
+             "hovertemplate": f"<b>{name} residual</b><br>[S]₀: %{{x:.2e}}<br>Res: %{{y:.2e}}<extra></extra>", "xaxis": "x", "yaxis": "y2"},
         ]
-        
-        layout = {
-            "margin": {"l": 65, "r": 20, "t": 30, "b": 45},
-            "legend": {"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "right", "x": 1},
-            "xaxis": {"title": "[S]₀", "zeroline": True, "tickformat": ".2e", "fixedrange": True},
-            "yaxis": {"title": "v₀", "zeroline": True, "domain": [0.35, 1], "tickformat": ".2e", "fixedrange": True},
-            "yaxis2": {"title": "Residuals", "zeroline": False, "domain": [0, 0.25], "anchor": "x", "tickformat": ".2e", "fixedrange": True}
-        }
-        
-        # Désactive la barre d'outils flottante de Plotly
-        config = {"displayModeBar": False}
-        
-        window.Plotly.newPlot("plot", window.JSON.parse(json.dumps(traces)), window.JSON.parse(json.dumps(layout)), window.JSON.parse(json.dumps(config)))
-        
-        js("#res-text").innerHTML = (
-            f"Vmax = <span class='res-val'>{vmax:.2e}</span> ± {vmax_se:.1e}<br>"
-            f"Km &nbsp;= <span class='res-val'>{km:.2e}</span> ± {km_se:.1e}<br>"
-            f"<span style='font-size:12px; color:#666;'>R² = {r2:.4f}</span>"
-        )
-        js("#results").classList.add("visible")
-        
-    except Exception as exc:
-        window.alert(f"Fitting error: {exc}")
+        # Red circle around residuals outside the 10% cone (as in v6.7)
+        out_mask = np.abs(residuals) > 0.10 * v_calc
+        if np.any(out_mask):
+            traces.append({"x": s[out_mask].tolist(), "y": residuals[out_mask].tolist(), "mode": "markers", "showlegend": False, "legendgroup": name,
+                           "marker": {"symbol": "circle-open", "size": 16, "color": "red", "line": {"color": "red", "width": 1.5}},
+                           "hovertemplate": f"<b>{name} residual &gt;10%</b><br>[S]₀: %{{x:.2e}}<br>Res: %{{y:.2e}}<extra></extra>",
+                           "xaxis": "x", "yaxis": "y2"})
+        # Excluded points: crosses on the MM plot and on the residuals
+        if len(s_ex) > 0:
+            ex_color = color if multi else "#999"
+            v_calc_ex = michaelis_menten(s_ex, vmax, km)
+            res_ex = v_ex - v_calc_ex
+            traces.append({"x": s_ex.tolist(), "y": v_ex.tolist(), "mode": "markers", "name": "Excluded", "legendgroup": name, "showlegend": not multi,
+                           "opacity": 0.6, "marker": {"color": ex_color, "symbol": "x", "size": 10, "line": {"width": 2}}, "xaxis": "x", "yaxis": "y"})
+            traces.append({"x": s_ex.tolist(), "y": res_ex.tolist(), "mode": "markers", "showlegend": False, "legendgroup": name, "opacity": 0.6,
+                           "marker": {"color": ex_color, "symbol": "x", "size": 9, "line": {"width": 2}},
+                           "hovertemplate": f"<b>{name} excluded residual</b><br>[S]₀: %{{x:.2e}}<br>Res: %{{y:.2e}}<extra></extra>",
+                           "xaxis": "x", "yaxis": "y2"})
+            out_ex = np.abs(res_ex) > 0.10 * v_calc_ex
+            if np.any(out_ex):
+                traces.append({"x": s_ex[out_ex].tolist(), "y": res_ex[out_ex].tolist(), "mode": "markers", "showlegend": False, "legendgroup": name, "opacity": 0.7,
+                               "marker": {"symbol": "circle-open", "size": 16, "color": "red", "line": {"color": "red", "width": 1.5}},
+                               "hovertemplate": f"<b>{name} excluded residual &gt;10%</b><br>[S]₀: %{{x:.2e}}<br>Res: %{{y:.2e}}<extra></extra>",
+                               "xaxis": "x", "yaxis": "y2"})
+
+    if not rows:
+        window.alert("Fitting error:\n" + "\n".join(failed))
+        return
+
+    traces.append({"x": [0, s_max * 1.2], "y": [0, 0], "mode": "lines", "showlegend": False, "hoverinfo": "skip",
+                   "line": {"color": "#999", "width": 1, "dash": "dash"}, "xaxis": "x", "yaxis": "y2"})
+
+    layout = {
+        "margin": {"l": 65, "r": 20, "t": 30, "b": 45},
+        "legend": {"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "right", "x": 1},
+        "xaxis": {"title": "[S]₀", "zeroline": True, "tickformat": ".2e", "fixedrange": True},
+        "yaxis": {"title": "v₀", "zeroline": True, "domain": [0.40, 1], "tickformat": ".2e", "fixedrange": True},
+        "yaxis2": {"title": "Residuals", "zeroline": False, "domain": [0, 0.30], "anchor": "x", "tickformat": ".2e", "fixedrange": True}
+    }
+    config = {"displayModeBar": False, "responsive": True}
+
+    note = excluded_note(excluded)
+    if failed:
+        note += ("<br>" if note else "") + "Not fitted: " + "; ".join(failed)
+    show_results(rows, note)
+    # Plot AFTER the results card is shown, so the plot is sized on the final layout
+    window.Plotly.newPlot("plot", window.JSON.parse(json.dumps(traces)), window.JSON.parse(json.dumps(layout)), window.JSON.parse(json.dumps(config)))
 
 def process_and_plot_lb(e):
-    raw_text = js("#data-input").value
-    if not raw_text: return
-    s, v = parse_ocr_data(raw_text)
-    
-    valid = (s > 0) & (v > 0)
-    s, v = s[valid], v[valid]
-    if len(s) < 3: return
-    
-    x, y = 1.0 / s, 1.0 / v
-    fit = linregress(x, y)
-    
-    vmax, km = 1.0 / fit.intercept, fit.slope / fit.intercept
-    
-    # Estimation des erreurs pour LB
-    try:
-        vmax_se = (fit.intercept_stderr / abs(fit.intercept)) * vmax if fit.intercept != 0 else 0
-        km_se = np.sqrt((fit.stderr / fit.slope)**2 + (fit.intercept_stderr / fit.intercept)**2) * km if (fit.slope != 0 and fit.intercept != 0) else 0
-    except AttributeError:
-        vmax_se, km_se = 0, 0
-        
-    x_intercept = -fit.intercept / fit.slope
-    xmin = min(x_intercept * 1.20, -0.10 * np.max(x))
-    xx = np.linspace(xmin, np.max(x) * 1.05, 100)
-    yy = fit.intercept + fit.slope * xx
-    
-    traces = [
-        {"x": x.tolist(), "y": y.tolist(), "mode": "markers", "name": "Data", "marker": {"color": "#333", "size": 10}},
-        {"x": xx.tolist(), "y": yy.tolist(), "mode": "lines", "name": "Linear Fit", "line": {"color": "#5B88A5", "width": 3}}
-    ]
-    
+    ds = get_dataset()
+    if ds is None:
+        return
+    s_all, V, excluded = ds
+    state["mode"] = "lb"
+    nser = V.shape[1]
+    multi = nser > 1
+
+    traces, rows, failed, x_ints, x_max_all = [], [], [], [], []
+    fits = []
+    for j in range(nser):
+        color, marker, name = COLORS[j % len(COLORS)], MARKERS[j % len(MARKERS)], series_name(j)
+        positive = np.isfinite(V[:, j]) & (s_all > 0) & (V[:, j] > 0)
+        use = positive & ~excluded[:, j]
+        ex = positive & excluded[:, j]
+        if np.sum(use) < 3:
+            failed.append(f"{name}: fewer than 3 points with [S]0 &gt; 0 and v0 &gt; 0")
+            continue
+        x, y = 1.0 / s_all[use], 1.0 / V[use, j]
+        fit = linregress(x, y)
+        if not np.isfinite(fit.slope) or fit.intercept == 0 or fit.slope == 0:
+            failed.append(f"{name}: linear fit failed")
+            continue
+        vmax, km = 1.0 / fit.intercept, fit.slope / fit.intercept
+        # Error propagation as in v6.7 (LB window)
+        vmax_se = abs(fit.intercept_stderr / fit.intercept) * abs(vmax)
+        km_se = np.sqrt((fit.stderr / fit.slope)**2 + (fit.intercept_stderr / fit.intercept)**2) * abs(km)
+        rows.append((j, vmax, vmax_se, km, km_se, fit.rvalue**2))
+        x_ints.append(-fit.intercept / fit.slope)
+        x_max_all.append(float(np.max(x)))
+        fits.append((j, fit))
+
+        traces.append({"x": x.tolist(), "y": y.tolist(), "mode": "markers", "name": name if multi else "Data", "legendgroup": name,
+                       "marker": {"color": color if multi else "#333", "symbol": marker, "size": 10}})
+        if np.any(ex):
+            traces.append({"x": (1.0 / s_all[ex]).tolist(), "y": (1.0 / V[ex, j]).tolist(), "mode": "markers", "name": "Excluded",
+                           "legendgroup": name, "showlegend": not multi, "opacity": 0.6,
+                           "marker": {"color": color if multi else "#999", "symbol": "x", "size": 10, "line": {"width": 2}}})
+
+    if not rows:
+        window.alert("Lineweaver-Burk fit not possible:\n" + "\n".join(re.sub("&gt;", ">", f) for f in failed))
+        return
+
+    xmin = min(min(x_ints) * 1.20, -0.10 * max(x_max_all))
+    xx = np.linspace(xmin, max(x_max_all) * 1.05, 100)
+    for j, fit in fits:
+        traces.append({"x": xx.tolist(), "y": (fit.intercept + fit.slope * xx).tolist(), "mode": "lines",
+                       "name": "Linear Fit", "legendgroup": series_name(j), "showlegend": not multi, "hoverinfo": "skip",
+                       "line": {"color": COLORS[j % len(COLORS)] if multi else "#5B88A5", "width": 3 if not multi else 2}})
+
     layout = {
         "margin": {"l": 65, "r": 20, "t": 30, "b": 50},
         "xaxis": {"title": "1 / [S]₀", "zeroline": True, "zerolinecolor": "#000", "tickformat": ".2e", "fixedrange": True},
         "yaxis": {"title": "1 / v₀", "zeroline": True, "zerolinecolor": "#000", "tickformat": ".2e", "fixedrange": True},
         "legend": {"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "right", "x": 1}
     }
-    
-    config = {"displayModeBar": False}
-    
+    config = {"displayModeBar": False, "responsive": True}
+
+    note = excluded_note(excluded)
+    if failed:
+        note += ("<br>" if note else "") + "Not fitted: " + "; ".join(failed)
+    show_results(rows, note)
+    # Plot AFTER the results card is shown, so the plot is sized on the final layout
     window.Plotly.newPlot("plot", window.JSON.parse(json.dumps(traces)), window.JSON.parse(json.dumps(layout)), window.JSON.parse(json.dumps(config)))
-    
-    js("#res-text").innerHTML = (
-        f"Vmax = <span class='res-val'>{vmax:.2e}</span> ± {vmax_se:.1e}<br>"
-        f"Km &nbsp;= <span class='res-val'>{km:.2e}</span> ± {km_se:.1e}<br>"
-        f"<span style='font-size:12px; color:#666;'>R² = {fit.rvalue**2:.4f}</span>"
-    )
-    js("#results").classList.add("visible")
-    
+
+# --- EXCLUDE DATA DIALOG ---
+def open_exclusion(e):
+    ds = get_dataset()
+    if ds is None:
+        return
+    s_all, V, excluded = ds
+    fits = state["fits"]
+    nser = V.shape[1]
+    html = "<table><thead><tr><th>#</th><th>[S]₀</th>"
+    for j in range(nser):
+        html += f"<th style='color:{COLORS[j % len(COLORS)]};'>{series_name(j)}</th>"
+    html += "</tr></thead><tbody>"
+    for i in range(len(s_all)):
+        html += f"<tr><td>{i+1}</td><td>{s_all[i]:.2e}</td>"
+        for j in range(nser):
+            v_val = V[i, j]
+            cls = ""
+            if j in fits and np.isfinite(v_val):
+                vmax, km = fits[j]
+                v_th = michaelis_menten(s_all[i], vmax, km) if (km + s_all[i]) > 0 else 0
+                if v_th != 0 and abs(v_val - v_th) > 0.10 * abs(v_th):
+                    cls = " class='outlier'"
+            chk = "checked" if excluded[i, j] else ""
+            html += (f"<td{cls}><label class='ex-cell'><input type='checkbox' class='ex-cb' data-row='{i}' data-col='{j}' {chk}>"
+                     f"<span>{v_val:.2e}</span></label></td>")
+        html += "</tr>"
+    html += "</tbody></table>"
+    js("#ex-wrap").innerHTML = html
+    js("#ex-modal").classList.remove("hidden")
+
+def close_exclusion(e):
+    js("#ex-modal").classList.add("hidden")
+
+def apply_exclusion(e):
+    if state["excluded"] is None:
+        close_exclusion(e)
+        return
+    mask = np.zeros(state["V"].shape, dtype=bool)
+    for cb in document.querySelectorAll(".ex-cb"):
+        if cb.checked:
+            mask[int(cb.getAttribute("data-row")), int(cb.getAttribute("data-col"))] = True
+    state["excluded"] = mask
+    close_exclusion(e)
+    if state["mode"] == "lb":
+        process_and_plot_lb(e)
+    else:
+        process_and_plot_mm(e)
+
 def clear_all(e):
     js("#data-input").value = ""
+    state.update({"text": None, "s": None, "V": None, "excluded": None, "fits": {}, "mode": "mm"})
     window.Plotly.purge("plot")
     js("#results").classList.remove("visible")
 
 js("#btn-mm").addEventListener("click", create_proxy(process_and_plot_mm))
 js("#btn-lb").addEventListener("click", create_proxy(process_and_plot_lb))
 js("#btn-clear").addEventListener("click", create_proxy(clear_all))
+js("#btn-ex").addEventListener("click", create_proxy(open_exclusion))
+js("#btn-ex-cancel").addEventListener("click", create_proxy(close_exclusion))
+js("#btn-ex-apply").addEventListener("click", create_proxy(apply_exclusion))
 
 js("#loading").classList.add("hidden")
 
 def on_resize(e):
     if js("#results").classList.contains("visible"):
-        window.Plotly.Plots.resize(js("plot"))
+        window.Plotly.Plots.resize(js("#plot"))
 
 window.addEventListener("resize", create_proxy(on_resize))
 </script>
