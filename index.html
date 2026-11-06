@@ -111,7 +111,10 @@
     @keyframes spin { 100% { transform: rotate(360deg); } }
 
     /* --- MODE IMPRESSION (PRINT / PDF) --- */
+    .print-only { display: none; }
     @media print {
+      .print-only { display: block !important; }
+      #table-wrap { display: none !important; }
       body { background: white; font-size: 11px; }
       /* On cache tout ce qui ne doit pas être imprimé */
       .header, .controls, #loading, .status, .modal { display: none !important; }
@@ -153,28 +156,28 @@
 <!-- Modal Units Dialog -->
 <div id="units-modal" class="modal hidden">
   <div class="modal-content" style="max-width: 400px;">
-    <h3>Définir les Unités</h3>
+    <h3>Set Units</h3>
     <p style="font-size: 12px; color: #666; margin-top: 5px;">
-      <i>Tips : Use '_' for lowerscript or '^' for upperscript.<br>Example : µmol.L^-1.s^-1 gives µmol.L<sup>-1</sup>.s<sup>-1</sup></i>
+      <i>Tip: use '_' for subscript and '^' for superscript.<br>Example: µmol.L^-1.s^-1 gives µmol.L<sup>-1</sup>.s<sup>-1</sup></i>
     </p>
     <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
-      <label style="font-size: 14px; font-weight: bold;">Unité axe X ([S]0) : 
-        <input type="text" id="x-unit-input" style="width: 100%; padding: 7px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px;" placeholder="Ex: µM">
+      <label style="font-size: 14px; font-weight: bold;">X axis unit ([S]0): 
+        <input type="text" id="x-unit-input" style="width: 100%; padding: 7px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px;" placeholder="e.g. µM">
       </label>
-      <label style="font-size: 14px; font-weight: bold;">Unité axe Y (v0) : 
-        <input type="text" id="y-unit-input" style="width: 100%; padding: 7px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px;" placeholder="Ex: µmol.min^-1">
+      <label style="font-size: 14px; font-weight: bold;">Y axis unit (v0): 
+        <input type="text" id="y-unit-input" style="width: 100%; padding: 7px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px;" placeholder="e.g. µmol.min^-1">
       </label>
     </div>
     <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
-      <button id="close-units-btn" class="secondary" style="width: auto; padding: 8px 15px;">Annuler</button>
-      <button id="apply-units-btn" class="action" style="width: auto; padding: 8px 15px;">Valider</button>
+      <button id="close-units-btn" class="secondary" style="width: auto; padding: 8px 15px;">Cancel</button>
+      <button id="apply-units-btn" class="action" style="width: auto; padding: 8px 15px;">Apply</button>
     </div>
   </div>
 </div>
 
 <div class="header">
   <div class="title">MM-Fit</div>
-  <div class="subtitle">Michaelis-Menten enzyme kinetics analysis from <a href="https://github.com/JMB-Scripts/Michaelis-Menten" target="_blank" style="color: inherit; text-decoration: underline;">JMB-Scripts</a> <span class="version-badge">v6.3</span></div>
+  <div class="subtitle">Michaelis-Menten enzyme kinetics analysis from <a href="https://github.com/JMB-Scripts/Michaelis-Menten" target="_blank" style="color: inherit; text-decoration: underline;">JMB-Scripts</a> <span class="version-badge">v6.5</span></div>
 </div>
 
 <div class="layout">
@@ -183,8 +186,9 @@
   <div class="panel data-panel">
     <h3>Data Table</h3>
     <div id="table-wrap" class="table-wrap"></div>
+    <div id="print-table" class="print-only"></div>
     <div class="status" style="text-align: center; color: #666;">
-      <i>💡 Tips : <b>Ctrl+V</b> anywhere on the page to import your data from Excel.</i>
+      <i>💡 Tip: press <b>Ctrl+V</b> (<b>Cmd+V</b> on Mac) anywhere on the page to import your data from Excel.</i>
     </div>
   </div>
 
@@ -236,6 +240,9 @@ data = {
 x_unit = ""
 y_unit = ""
 
+# Last fit parameters per series {series: (vmax, km)}, used by the Exclude dialog
+fits = {}
+
 MARKERS = ["circle", "diamond", "triangle-up", "square", "triangle-down", "star"]
 COLORS = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b"]
 
@@ -245,6 +252,12 @@ def michaelis_menten(s, vmax, km):
 def js(id): return document.querySelector(id)
 def set_status(message): js("#status").innerText = message
 def fmt(x): return f"{x:.2e}"
+
+def fmt_pm(val, se, unit_str=""):
+    """'1.23e-06 unit (± 4.5e-08 | 4%)' as in v6.7 legends."""
+    rse = abs(se / val) * 100 if val != 0 and np.isfinite(se) else float("inf")
+    rse_txt = f"{rse:.0f}%" if np.isfinite(rse) else "∞"
+    return f"<code>{val:.2e}</code>{unit_str} (± {se:.1e} | {rse_txt})"
 
 def format_units_html(text):
     """Convertit les ^ et _ en balises HTML pour Plotly et le DOM"""
@@ -302,13 +315,28 @@ def set_value(h, i, value):
 
 # --- IMPORT INVISIBLE (CTRL+V & BOUTON) ---
 def process_pasted_text(text):
-    if not text.strip():
-        set_status("No data pasted.")
+    if not text or not text.strip():
+        set_status("Clipboard is empty.")
+        window.alert("/!\\ Warning /!\\\n\nThe clipboard is empty.\n\nCopy your data from Excel first.")
         return
 
     try:
+        # 0. Header detection (as in v6.7): if the first cell of the first line
+        #    is not a number, the first line is a header and is skipped.
+        #    Done BEFORE OCR cleaning, otherwise "[S]0 v0" would become "0 0".
+        raw_lines = [line for line in text.splitlines() if line.strip()]
+        first_cell = raw_lines[0].strip().split()[0].replace(",", ".")
+        try:
+            float(first_cell)
+        except ValueError:
+            raw_lines = raw_lines[1:]
+            if not raw_lines:
+                set_status("Header detected, but no data rows found.")
+                window.alert("/!\\ No Data /!\\\n\nHeader detected, but no data rows found.")
+                return
+
         # 1. OCR text cleaning (Removes artifacts from pictures)
-        cleaned = re.sub(r'[^\d\.\,eE\-\+\t\n ]', '', text)
+        cleaned = re.sub(r'[^\d\.\,eE\-\+\t\n ]', '', "\n".join(raw_lines))
         lines = [line.strip() for line in cleaned.splitlines() if line.strip()]
         
         # 2. Parse numbers safely
@@ -348,6 +376,7 @@ def process_pasted_text(text):
         # 5. Build multiple series
         ncol = len(matrix[0])
         data.clear()
+        fits.clear()
         data["[S]0"] = [r[0] for r in matrix]
         data["Exclude"] = {}
 
@@ -358,7 +387,7 @@ def process_pasted_text(text):
 
         render_series()
         render_table()
-        set_status(f"{len(matrix)} data points loaded from OCR.")
+        set_status(f"{len(matrix)} data points loaded.")
         
     except Exception as exc:
         set_status(f"Could not read data: {exc}")
@@ -370,10 +399,13 @@ async def paste_from_button(e):
     except Exception:
         set_status("Clipboard access blocked. Please use Ctrl+V on your keyboard.")
 def paste_from_keyboard(e):
-    text = e.clipboardData.getData("text")
-    if text:
-       process_pasted_text(text)
-       e.preventDefault()
+    # Let normal pasting work inside text fields (units, table cells)
+    tag = str(e.target.tagName).upper() if e.target else ""
+    if tag in ("INPUT", "TEXTAREA"):
+        return
+    e.preventDefault()
+    text = e.clipboardData.getData("text") if e.clipboardData else ""
+    process_pasted_text(text)
 
 # --- FENÊTRES MODALES ---
 def open_exclusion_gui(e):
@@ -391,7 +423,15 @@ def open_exclusion_gui(e):
         for v in v_cols:
             is_ex = "checked" if data["Exclude"].get(v, [False]*rows)[i] else ""
             html += f"<td style='text-align:center;'><input type='checkbox' class='ex-cb' data-series='{v}' data-row='{i}' {is_ex}></td>"
-            html += f"<td>{fmt(data[v][i])}</td>"
+            # Red + bold if the point is outside the ±10% cone of the last fit (as in v6.7)
+            style = ""
+            if v in fits:
+                vmax, km = fits[v]
+                s_val, v_val = data["[S]0"][i], data[v][i]
+                v_th = michaelis_menten(s_val, vmax, km) if (km + s_val) > 0 else 0
+                if v_th != 0 and abs(v_val - v_th) > 0.10 * abs(v_th):
+                    style = " style='color:red; font-weight:bold;'"
+            html += f"<td{style}>{fmt(data[v][i])}</td>"
         html += "</tr>"
     html += "</tbody></table>"
     
@@ -412,6 +452,50 @@ def apply_exclusion(e):
             
     js("#exclusion-modal").classList.add("hidden")
     fit_data()
+
+# --- PRINTED REPORT TABLE (as in v6.7: red = outlier >10%, bold + * = excluded) ---
+def fmt_report(v):
+    """3 significant figures; scientific notation outside 0.01–1000 (as in v6.7)."""
+    try: v = float(v)
+    except (TypeError, ValueError): return str(v)
+    if v == 0: return "0"
+    if 1e-2 <= abs(v) < 1e3:
+        s = f"{v:.3g}"
+        if "e" not in s: return s
+    return f"{v:.2E}"
+
+def build_print_table(e=None):
+    cols = [c for c in data.keys() if c not in ("Exclude", "[S]0")]
+    n = len(data.get("[S]0", []))
+    ux, uy = format_units_html(x_unit), format_units_html(y_unit)
+    html = "<table><thead><tr><th>#</th>"
+    html += f"<th>[S]0{'<br>(' + ux + ')' if ux else ''}</th>"
+    for c in cols: html += f"<th>{c}{'<br>(' + uy + ')' if uy else ''}</th>"
+    html += "</tr></thead><tbody>"
+    for i in range(n):
+        s_val = data["[S]0"][i]
+        html += f"<tr><td>{i+1}</td><td>{fmt_report(s_val)}</td>"
+        for c in cols:
+            v_val = data[c][i]
+            excluded = data["Exclude"].get(c, [False] * n)[i]
+            outlier = False
+            if c in fits:
+                vmax, km = fits[c]
+                v_th = michaelis_menten(s_val, vmax, km) if (km + s_val) > 0 else 0
+                outlier = v_th > 0 and abs(v_val - v_th) > 0.10 * abs(v_th)
+            style = []
+            if outlier: style.append("color:red")
+            if outlier or excluded: style.append("font-weight:bold")
+            st = f" style='{';'.join(style)}'" if style else ""
+            html += f"<td{st}>{fmt_report(v_val)}{'*' if excluded else ''}</td>"
+        html += "</tr>"
+    html += "</tbody></table>"
+    html += "<div style='font-size:10px; margin-top:4px;'><span style='color:red; font-weight:bold;'>red</span> outlier (&gt;10%) &nbsp;&nbsp; <b>*</b> excluded</div>"
+    js("#print-table").innerHTML = html
+
+def print_report(e):
+    build_print_table()
+    window.print()
 
 def open_units_gui(e):
     js("#x-unit-input").value = x_unit
@@ -438,6 +522,7 @@ def fit_data():
     uy_str = f" {uy}" if uy else ""
 
     results = []
+    fits.clear()
     for series in series_list:
         s = np.asarray(data["[S]0"], dtype=float)
         v = np.asarray(data[series], dtype=float)
@@ -468,6 +553,7 @@ def fit_data():
         except: continue
 
     if not results: return
+    fits.update({r["series"]: (r["vmax"], r["km"]) for r in results})
 
     traces = []
     nseries = len(results)
@@ -511,6 +597,17 @@ def fit_data():
             "xaxis": xaxis_name, "yaxis": yaxis_name,
         })
 
+        # Red circle around points outside the ±10% cone (as in v6.7)
+        out_mask = np.abs(residuals) > 0.10 * michaelis_menten(s, r["vmax"], r["km"])
+        if np.any(out_mask):
+            traces.append({
+                "x": s[out_mask].tolist(), "y": residuals[out_mask].tolist(), "type": "scatter", "mode": "markers",
+                "showlegend": False,
+                "marker": {"symbol": "circle-open", "size": 15, "color": "red", "line": {"color": "red", "width": 1.5}},
+                "hovertemplate": f"<b>Residual &gt;10%</b><br>[S]₀: %{{x:.2e}}{ux_str}<br>Res: %{{y:.2e}}{uy_str}<extra></extra>",
+                "xaxis": xaxis_name, "yaxis": yaxis_name,
+            })
+
         traces.append({
             "x": s_plot.tolist() + s_plot[::-1].tolist(),
             "y": tolerance.tolist() + (-tolerance[::-1]).tolist(),
@@ -526,6 +623,15 @@ def fit_data():
                 "hovertemplate": f"<b>Excluded Residual</b><br>[S]₀: %{{x:.2e}}{ux_str}<br>Res: %{{y:.2e}}{uy_str}<extra></extra>",
                 "xaxis": xaxis_name, "yaxis": yaxis_name,
             })
+            out_ex = np.abs(res_ex) > 0.10 * michaelis_menten(r["s_excluded"], r["vmax"], r["km"])
+            if np.any(out_ex):
+                traces.append({
+                    "x": r["s_excluded"][out_ex].tolist(), "y": res_ex[out_ex].tolist(), "type": "scatter", "mode": "markers",
+                    "showlegend": False, "opacity": 0.7,
+                    "marker": {"symbol": "circle-open", "size": 15, "color": "red", "line": {"color": "red", "width": 1.5}},
+                    "hovertemplate": f"<b>Excluded Residual &gt;10%</b><br>[S]₀: %{{x:.2e}}{ux_str}<br>Res: %{{y:.2e}}{uy_str}<extra></extra>",
+                    "xaxis": xaxis_name, "yaxis": yaxis_name,
+                })
 
     main_height = 0.45
     gap = 0.015
@@ -551,7 +657,9 @@ def fit_data():
 
     summary = '<div class="summary-title">Fit values</div>'
     for r in results:
-        summary += (f"<b>{r['series']}</b> — Vmax = <code>{r['vmax']:.2e}{uy_str}</code> &nbsp; Km = <code>{r['km']:.2e}{ux_str}</code> &nbsp; R² = <code>{r['r2']:.4f}</code><br>")
+        summary += (f"<b>{r['series']}</b> (R² = <code>{r['r2']:.3f}</code>) — "
+                    f"Vmax = {fmt_pm(r['vmax'], r['vmax_se'], uy_str)} &nbsp; "
+                    f"Km = {fmt_pm(r['km'], r['km_se'], ux_str)}<br>")
     js("#summary").innerHTML = summary
 
 
@@ -582,6 +690,10 @@ def lb_plot(e):
         if not np.isfinite(fit.slope) or fit.intercept == 0: continue
 
         vmax, km = 1.0 / fit.intercept, fit.slope / fit.intercept
+        # Error propagation as in v6.7 (LB window)
+        vmax_rse = abs(fit.intercept_stderr / fit.intercept)
+        km_rse = np.sqrt((fit.stderr / fit.slope)**2 + (fit.intercept_stderr / fit.intercept)**2) if fit.slope != 0 else float("inf")
+        vmax_se, km_se = vmax_rse * abs(vmax), km_rse * abs(km)
         xmax = float(np.max(x))
         x_intercept = -fit.intercept / fit.slope
         xmin = min(x_intercept * 1.20, -0.10 * xmax)
@@ -589,7 +701,8 @@ def lb_plot(e):
 
         results.append({
             "series": series, "x": x, "y": y, "xx": xx, "yy": fit.intercept + fit.slope * xx,
-            "x_ex": x_ex, "y_ex": y_ex, "vmax": vmax, "km": km, "r2": float(fit.rvalue**2)
+            "x_ex": x_ex, "y_ex": y_ex, "vmax": vmax, "km": km, "r2": float(fit.rvalue**2),
+            "vmax_se": vmax_se, "km_se": km_se,
         })
 
     traces = []
@@ -612,16 +725,28 @@ def lb_plot(e):
     }
     window.Plotly.newPlot("mm-plot", window.JSON.parse(json.dumps(traces)), window.JSON.parse(json.dumps(layout)))
 
+    ux_str = f" {ux}" if ux else ""
+    uy_str = f" {uy}" if uy else ""
+    summary = '<div class="summary-title">Lineweaver–Burk fit values</div>'
+    for r in results:
+        summary += (f"<b>{r['series']}</b> (R² = <code>{r['r2']:.3f}</code>) — "
+                    f"Vmax = {fmt_pm(r['vmax'], r['vmax_se'], uy_str)} &nbsp; "
+                    f"Km = {fmt_pm(r['km'], r['km_se'], ux_str)}<br>")
+    if not results:
+        summary += "Not enough valid points ([S]₀ &gt; 0 and v₀ &gt; 0) for a Lineweaver–Burk fit."
+    js("#summary").innerHTML = summary
+
 def reset(e):
+    global x_unit, y_unit
     data.clear()
-    data.update({
-        "Exclude": {"v0": [False, False, False, False, False]},
-        "[S]0": [0.0, 3.75e-4, 4.37e-4, 8.12e-4, 9.37e-4],
-        "v0": [0.0, 4.32e-7, 4.86e-7, 5.08e-7, 5.45e-7],
-    })
+    fits.clear()
+    data.update({"Exclude": {}, "[S]0": []})
+    x_unit, y_unit = "", ""
     render_series()
     render_table()
     window.Plotly.purge("mm-plot")
+    js("#summary").innerHTML = '<div class="summary-title">Fit values</div>Fit results will appear here.'
+    set_status("Reset done. Paste new data.")
 
 # [Le code de how_to_fit_plot reste identique]
 def how_to_fit_plot(e):
@@ -750,7 +875,8 @@ js("#close-exclusion-btn").addEventListener("click", create_proxy(lambda e: js("
 js("#units-btn").addEventListener("click", create_proxy(open_units_gui))
 js("#apply-units-btn").addEventListener("click", create_proxy(apply_units))
 js("#close-units-btn").addEventListener("click", create_proxy(lambda e: js("#units-modal").classList.add("hidden")))
-js("#print-btn").addEventListener("click", create_proxy(lambda e: window.print()))
+js("#print-btn").addEventListener("click", create_proxy(print_report))
+window.addEventListener("beforeprint", create_proxy(build_print_table))
 js("#reset-btn").addEventListener("click", create_proxy(reset))
 
 render_series()
