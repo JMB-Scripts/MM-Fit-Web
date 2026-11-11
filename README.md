@@ -23,7 +23,7 @@ To streamline practical biochemistry sessions (TD) and eliminate manual data ent
 
   *Note*: for Qr-code generation have look [here](https://github.com/JMB-Scripts/Qrcode-easy)
 
-  <img width="112" height="112" alt="Excercie-4" src="https://github.com/user-attachments/assets/3ecf8e38-ac36-487a-b2ad-c75245bf45c9" />
+  <img width="112" height="112" alt="Excercice-4" src="https://github.com/user-attachments/assets/3ecf8e38-ac36-487a-b2ad-c75245bf45c9" />
 
    example of link: https://JMB-Scripts.github.io/MM-Fit-Web/index.html?S=1E-4,1.5E-4,2E-4,5E-4,7.5E-4&V=28,35,42,63,75        
 
@@ -40,11 +40,14 @@ To streamline practical biochemistry sessions (TD) and eliminate manual data ent
 8. Use the **Print report** to print the report
 9. **Reset** — restore the default data.
 
-## Screenshot
+## Screenshots
+Desktop version
 
-<img width="1703" height="944" alt="image" src="https://github.com/user-attachments/assets/dae79975-eb26-44d6-8fc1-4a44593db927" />
+<img width="851" height="472" alt="image" src="https://github.com/user-attachments/assets/dae79975-eb26-44d6-8fc1-4a44593db927" />
 
-
+Mobile version 
+<img width="585" height="1266" alt="image" src="https://github.com/user-attachments/assets/f38c9d2a-1c76-4895-8df5-5b8c8bcd3565" />
+<img width="585" height="1266" alt="image" src="https://github.com/user-attachments/assets/969a1656-d23d-4c10-99de-cb200e5cae85" />
 
 
 Designed for teaching enzyme kinetics in the **UGA**
