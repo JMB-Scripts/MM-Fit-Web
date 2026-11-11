@@ -23,7 +23,7 @@ To streamline practical biochemistry sessions (TD) and eliminate manual data ent
 
   *Note*: for Qr-code generation have look [here](https://github.com/JMB-Scripts/Qrcode-easy)
 
-  <img width="225" height="225" alt="Excercie-4" src="https://github.com/user-attachments/assets/3ecf8e38-ac36-487a-b2ad-c75245bf45c9" />
+  <img width="112" height="112" alt="Excercie-4" src="https://github.com/user-attachments/assets/3ecf8e38-ac36-487a-b2ad-c75245bf45c9" />
 
    example of link: https://JMB-Scripts.github.io/MM-Fit-Web/index.html?S=1E-4,1.5E-4,2E-4,5E-4,7.5E-4&V=28,35,42,63,75        
 
