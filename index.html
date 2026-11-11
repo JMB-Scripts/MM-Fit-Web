@@ -8,7 +8,7 @@
   <script>
     // Redirect to the mobile version if the screen is small
     if (window.innerWidth <= 800 && !window.location.href.includes("mobile.html")) {
-        window.location.replace("mobile.html");
+        window.location.replace("mobile.html" + window.location.search);
     }
   </script>
   
@@ -631,7 +631,19 @@ def fit_data():
                     "marker": {"symbol": "circle-open", "size": 15, "color": "red", "line": {"color": "red", "width": 1.5}},
                     "hovertemplate": f"<b>Excluded Residual &gt;10%</b><br>[S]₀: %{{x:.2e}}{ux_str}<br>Res: %{{y:.2e}}{uy_str}<extra></extra>",
                     "xaxis": xaxis_name, "yaxis": yaxis_name,
-                })
+                    })
+        
+
+    # ---> AJOUTER LE CALCUL DU CHIFFRE ROND ICI <---
+    max_y = 0
+    for r in results:
+        max_y = max(max_y, r["vmax"], float(np.max(r["v"])) if len(r["v"]) else 0)
+    
+    if max_y > 0:
+        mag = 10 ** np.floor(np.log10(max_y))
+        y_axis_max = np.ceil(max_y / mag) * mag
+    else:
+        y_axis_max = 1.0
 
     main_height = 0.45
     gap = 0.015
@@ -644,7 +656,9 @@ def fit_data():
         "legend": {"font": {"size": 11}},
         "hoverlabel": {"font": {"size": 13}, "namelength": -1},
         "xaxis": {"title": f"[S]₀ ({ux})" if ux else "[S]₀", "domain": [0, 1], "anchor": "y", "tickformat": ".1e"},
-        "yaxis": {"title": f"v₀ ({uy})" if uy else "v₀", "domain": [1.0 - main_height, 1.0], "anchor": "x", "tickformat": ".1e"},
+        
+        # ---> AJOUTER "range": [0, y_axis_max] À LA FIN DE CETTE LIGNE <---
+        "yaxis": {"title": f"v₀ ({uy})" if uy else "v₀", "domain": [1.0 - main_height, 1.0], "anchor": "x", "tickformat": ".1e", "range": [0, y_axis_max]},
     }
 
     for i, r in enumerate(results):
@@ -883,6 +897,33 @@ render_series()
 render_table()
 js("#loading").classList.add("hidden")
 js("#howto-btn").addEventListener("click", create_proxy(how_to_fit_plot))
+
+# === LECTURE DES PARAMÈTRES D'URL (QR CODE) ===
+def check_url_parameters():
+    params = window.URLSearchParams.new(window.location.search)
+    s_str = params.get("S")
+    v_str = params.get("V")
+    
+    if s_str and v_str:
+        try:
+            s_vals = [float(s.strip()) for s in s_str.split(",")]
+            v_vals = [float(v.strip()) for v in v_str.split(",")]
+            
+            data.clear()
+            fits.clear()
+            data["[S]0"] = s_vals
+            data["v0"] = v_vals
+            data["Exclude"] = {"v0": [False] * len(s_vals)}
+            
+            render_series()
+            render_table()
+            
+            # Message incitant l'étudiant à cliquer
+            set_status("Données préchargées. Cliquez sur '2- MM-Fit' pour analyser.")
+        except Exception as e:
+            print(f"Erreur de lecture de l'URL : {e}")
+
+check_url_parameters()
 </script>
 </body>
 </html>
