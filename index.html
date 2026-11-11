@@ -898,28 +898,57 @@ render_table()
 js("#loading").classList.add("hidden")
 js("#howto-btn").addEventListener("click", create_proxy(how_to_fit_plot))
 
-# === LECTURE DES PARAMÈTRES D'URL (QR CODE) ===
+# === LECTURE DES PARAMÈTRES D'URL (QR CODE - MULTI-SÉRIES) ===
 def check_url_parameters():
     params = window.URLSearchParams.new(window.location.search)
     s_str = params.get("S")
-    v_str = params.get("V")
     
-    if s_str and v_str:
+    if s_str:
         try:
             s_vals = [float(s.strip()) for s in s_str.split(",")]
-            v_vals = [float(v.strip()) for v in v_str.split(",")]
             
-            data.clear()
-            fits.clear()
-            data["[S]0"] = s_vals
-            data["v0"] = v_vals
-            data["Exclude"] = {"v0": [False] * len(s_vals)}
+            # Récupérer toutes les séries V (gestion de &V=...&V=... ou &v0=...)
+            v_lists = []
+            js_v_all = params.getAll("V") if hasattr(params, "getAll") else None
+            if not js_v_all or len(js_v_all) == 0:
+                js_v_all = params.getAll("v") if hasattr(params, "v") else None
+                
+            if js_v_all:
+                for i in range(js_v_all.length):
+                    v_str = js_v_all.at(i) if hasattr(js_v_all, "at") else js_v_all[i]
+                    if v_str:
+                        v_lists.append([float(v.strip()) for v in v_str.split(",")])
             
-            render_series()
-            render_table()
+            # Fallback si indexé (v0, v1 ou V1, V2)
+            if not v_lists:
+                idx = 0
+                while True:
+                    v_str = params.get(f"v{idx}") or params.get(f"V{idx+1}") or params.get(f"V{idx}")
+                    if not v_str:
+                        break
+                    v_lists.append([float(v.strip()) for v in v_str.split(",")])
+                    idx += 1
             
-            # Message incitant l'étudiant à cliquer
-            set_status("🚀 <b style='color:#E74C3C; font-size:14px; background:#FDECEA; padding:3px 8px; border-radius:4px;'>Data pre-loaded! Click '2- MM-Fit' to analyze.</b>")
+            # Dernier fallback (un seul V=)
+            if not v_lists:
+                v_str = params.get("V") or params.get("v")
+                if v_str:
+                    v_lists.append([float(v.strip()) for v in v_str.split(",")])
+
+            if s_vals and v_lists:
+                data.clear()
+                fits.clear()
+                data["[S]0"] = s_vals
+                data["Exclude"] = {}
+                
+                for idx, v_vals in enumerate(v_lists):
+                    s_name = f"v{idx}"
+                    data[s_name] = v_vals
+                    data["Exclude"][s_name] = [False] * len(s_vals)
+                
+                render_series()
+                render_table()
+                set_status(f"🚀 <b style='color:#E74C3C; font-size:14px; background:#FDECEA; padding:3px 8px; border-radius:4px;'>{len(v_lists)} series pre-loaded! Click '2- MM-Fit' to analyze.</b>")
         except Exception as e:
             print(f"Erreur de lecture de l'URL : {e}")
 
