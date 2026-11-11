@@ -46,6 +46,7 @@ To streamline practical biochemistry sessions (TD) and eliminate manual data ent
 
 <img width="851" height="472" alt="image" src="https://github.com/user-attachments/assets/dae79975-eb26-44d6-8fc1-4a44593db927" />
 
+
 **Mobile version** 
 
 <img width="292" height="633" alt="image" src="https://github.com/user-attachments/assets/f38c9d2a-1c76-4895-8df5-5b8c8bcd3565" />
