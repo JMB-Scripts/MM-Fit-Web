@@ -41,13 +41,17 @@ To streamline practical biochemistry sessions (TD) and eliminate manual data ent
 9. **Reset** — restore the default data.
 
 ## Screenshots
-Desktop version
+
+**Desktop version**
 
 <img width="851" height="472" alt="image" src="https://github.com/user-attachments/assets/dae79975-eb26-44d6-8fc1-4a44593db927" />
 
-Mobile version 
-<img width="585" height="1266" alt="image" src="https://github.com/user-attachments/assets/f38c9d2a-1c76-4895-8df5-5b8c8bcd3565" />
-<img width="585" height="1266" alt="image" src="https://github.com/user-attachments/assets/969a1656-d23d-4c10-99de-cb200e5cae85" />
+**Mobile version** 
+
+<img width="292" height="633" alt="image" src="https://github.com/user-attachments/assets/f38c9d2a-1c76-4895-8df5-5b8c8bcd3565" />
+
+
+<img width="292" height="633" alt="image" src="https://github.com/user-attachments/assets/969a1656-d23d-4c10-99de-cb200e5cae85" />
 
 
 Designed for teaching enzyme kinetics in the **UGA**
