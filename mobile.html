@@ -1075,23 +1075,52 @@ def on_resize(e):
 
 window.addEventListener("resize", create_proxy(on_resize))
 
-# === LECTURE DES PARAMÈTRES D'URL (QR CODE) ===
+# === LECTURE DES PARAMÈTRES D'URL (QR CODE - MULTI-SÉRIES) ===
 def check_url_parameters():
     params = window.URLSearchParams.new(window.location.search)
     s_str = params.get("S")
-    v_str = params.get("V")
     
-    if s_str and v_str:
+    if s_str:
         try:
             s_vals = [s.strip() for s in s_str.split(",")]
-            v_vals = [v.strip() for v in v_str.split(",")]
             
-            grid = []
-            for s, v in zip(s_vals, v_vals):
-                grid.append([s, v])
+            v_lists = []
+            js_v_all = params.getAll("V") if hasattr(params, "getAll") else None
+            if not js_v_all or len(js_v_all) == 0:
+                js_v_all = params.getAll("v") if hasattr(params, "v") else None
+                
+            if js_v_all:
+                for i in range(js_v_all.length):
+                    v_str = js_v_all.at(i) if hasattr(js_v_all, "at") else js_v_all[i]
+                    if v_str:
+                        v_lists.append([v.strip() for v in v_str.split(",")])
             
-            if grid:
-                load_grid(grid, ["V0"], source="🚀 <b style='color:#E74C3C; background:#FDECEA; padding:2px 6px; border-radius:4px;'>Data pre-loaded! Tap 'MM Fit'.</b>", example=True)
+            if not v_lists:
+                idx = 0
+                while True:
+                    v_str = params.get(f"v{idx}") or params.get(f"V{idx+1}") or params.get(f"V{idx}")
+                    if not v_str:
+                        break
+                    v_lists.append([v.strip() for v in v_str.split(",")])
+                    idx += 1
+            
+            if not v_lists:
+                    v_str = params.get("V") or params.get("v")
+                    if v_str:
+                        v_lists.append([v.strip() for v in v_str.split(",")])
+
+            if s_vals and v_lists:
+                # Construire la grille multi-colonnes : [s, v0, v1, ...]
+                grid = []
+                for i in range(len(s_vals)):
+                    row = [s_vals[i]]
+                    for v_list in v_lists:
+                        row.append(v_list[i] if i < len(v_list) else "")
+                    grid.append(row)
+                
+                names = [f"v{i}" for i in range(len(v_lists))]
+                if grid:
+                    load_grid(grid, names, source=f"🚀 <b style='color:#E74C3C; background:#FDECEA; padding:2px 6px; border-radius:4px;'>{len(v_lists)} series pre-loaded! Tap 'MM Fit'.</b>", example=True)
         except Exception as e:
             print(f"Erreur de lecture de l'URL : {e}")
 
