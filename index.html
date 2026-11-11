@@ -250,7 +250,7 @@ def michaelis_menten(s, vmax, km):
     return (vmax * s) / (km + s)
 
 def js(id): return document.querySelector(id)
-def set_status(message): js("#status").innerText = message
+def set_status(message): js("#status").innerHTML = message
 def fmt(x): return f"{x:.2e}"
 
 def fmt_pm(val, se, unit_str=""):
