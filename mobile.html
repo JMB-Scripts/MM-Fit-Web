@@ -10,9 +10,9 @@
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 
   <script>
-    // Redirect back to desktop if the viewport becomes large (e.g., "Request Desktop Site")
+    // Redirect back to desktop if the viewport becomes large
     if (window.innerWidth > 800) {
-        window.location.replace("index.html");
+        window.location.replace("index.html" + window.location.search);
     }
   </script>
 
@@ -61,7 +61,7 @@
     }
     button:active { transform: translateY(1px); }
     .btn-mm { background: var(--mm-green); }
-    .btn-lb { background: var(--mm-blue); }
+    .btn-lb { background: var(--mm-green); }
     .btn-clear { background: var(--mm-warning); flex: 0.4; }
     .btn-small { padding: 10px 8px; font-size: 14px; }
     .btn-import { background: var(--mm-blue); }
@@ -876,10 +876,23 @@ def process_and_plot_mm(e):
                                "marker": {"symbol": "circle-open", "size": 16, "color": "red", "line": {"color": "red", "width": 1.5}},
                                "hovertemplate": f"<b>{name} excluded residual &gt;10%</b><br>[S]₀: %{{x:.2e}}<br>Res: %{{y:.2e}}<extra></extra>",
                                "xaxis": "x", "yaxis": ya})
-
+    
     if not rows:
         window.alert("Fitting error:\n" + "\n".join(failed))
         return
+
+# ---> AJOUTER LE CALCUL DU CHIFFRE ROND ICI <---
+    max_y = 0
+    for j_idx, r_vmax, _, _, _, _ in rows:
+        use = np.isfinite(V[:, j_idx]) & ~excluded[:, j_idx]
+        max_v = float(np.max(V[use, j_idx])) if np.any(use) else 0.0
+        max_y = max(max_y, float(r_vmax), max_v)
+        
+    if max_y > 0:
+        mag = 10 ** np.floor(np.log10(max_y))
+        y_axis_max = float(np.ceil(max_y / mag) * mag)
+    else:
+        y_axis_max = 1.0
 
     # Layout: MM plot on top, then one residual panel per series (no overlay), sharing the [S]0 axis.
     # Sizes are planned in pixels, then converted to fractions of the plot height.
@@ -891,8 +904,10 @@ def process_and_plot_mm(e):
         "margin": {"l": 65, "r": 20, "t": 30, "b": 45},
         "legend": {"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "right", "x": 1},
         "xaxis": {"title": "[S]₀", "zeroline": True, "tickformat": tickfmt(s_all), "fixedrange": True, "anchor": f"y{n + 1}"},
+        
+        # ---> AJOUTER "range": [0, y_axis_max] À LA FIN DE CETTE LIGNE <---
         "yaxis": {"title": {"text": "v₀", "standoff": 8}, "automargin": True, "zeroline": True,
-                  "domain": [1 - MAIN_PX / total, 1], "tickformat": yfmt, "fixedrange": True},
+                  "domain": [1 - MAIN_PX / total, 1], "tickformat": yfmt, "fixedrange": True, "range": [0, y_axis_max]},
     }
     top = 1 - (MAIN_PX + GAP_PX) / total
     for k, row in enumerate(rows, start=1):
@@ -1059,6 +1074,29 @@ def on_resize(e):
         window.Plotly.Plots.resize(js("#plot"))
 
 window.addEventListener("resize", create_proxy(on_resize))
+
+# === LECTURE DES PARAMÈTRES D'URL (QR CODE) ===
+def check_url_parameters():
+    params = window.URLSearchParams.new(window.location.search)
+    s_str = params.get("S")
+    v_str = params.get("V")
+    
+    if s_str and v_str:
+        try:
+            s_vals = [s.strip() for s in s_str.split(",")]
+            v_vals = [v.strip() for v in v_str.split(",")]
+            
+            grid = []
+            for s, v in zip(s_vals, v_vals):
+                grid.append([s, v])
+            
+            if grid:
+                # Charge les données dans le tableau sans déclencher le graphique
+                load_grid(grid, ["V0"], source="Exercice préchargé", example=True)
+        except Exception as e:
+            print(f"Erreur de lecture de l'URL : {e}")
+
+check_url_parameters()
 </script>
 </body>
 </html>
