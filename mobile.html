@@ -1091,8 +1091,7 @@ def check_url_parameters():
                 grid.append([s, v])
             
             if grid:
-                # Charge les données dans le tableau sans déclencher le graphique
-                load_grid(grid, ["V0"], source="Exercice préchargé", example=True)
+                load_grid(grid, ["V0"], source="🚀 <b style='color:#E74C3C; background:#FDECEA; padding:2px 6px; border-radius:4px;'>Data pre-loaded! Tap 'MM Fit'.</b>", example=True)
         except Exception as e:
             print(f"Erreur de lecture de l'URL : {e}")
 
