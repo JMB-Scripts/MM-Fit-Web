@@ -249,6 +249,15 @@ COLORS = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b"]
 def michaelis_menten(s, vmax, km):
     return (vmax * s) / (km + s)
 
+def tickfmt(*arrays):
+    """Plain ticks for 'normal' numbers (28, 75...), '1.23e-4' style otherwise (as in the mobile version)."""
+    vals = np.concatenate([np.abs(np.asarray(a, dtype=float)).ravel() for a in arrays])
+    vals = vals[np.isfinite(vals) & (vals > 0)]
+    if not len(vals):
+        return ""
+    m = float(np.max(vals))
+    return "" if 1e-2 <= m < 1e4 else ".2e"
+
 def js(id): return document.querySelector(id)
 def set_status(message): js("#status").innerHTML = message
 def fmt(x): return f"{x:.2e}"
@@ -588,7 +597,7 @@ def fit_data():
 
         residuals = v - michaelis_menten(s, r["vmax"], r["km"])
         tolerance = 0.10 * michaelis_menten(s_plot, r["vmax"], r["km"])
-        row, xaxis_name, yaxis_name = i + 2, f"x{i + 2}", f"y{i + 2}"
+        row, xaxis_name, yaxis_name = i + 2, "x2", f"y{i + 2}"     # residuals: x2, synced with the fit's x axis
         
         traces.append({
             "x": s.tolist(), "y": residuals.tolist(), "type": "scatter", "mode": "markers",
@@ -645,27 +654,42 @@ def fit_data():
     else:
         y_axis_max = 1.0
 
-    main_height = 0.45
-    gap = 0.015
-    residual_height = (1.0 - main_height - gap * nseries) / nseries
+    # Layout as in the mobile version: MM plot on top, then one compact residual panel per series,
+    # all sharing the [S]0 axis (ticks only under the last panel). Sizes planned in pixels.
+    MAIN_PX, RES_PX, GAP_PX, FIRST_GAP_PX = 340, 110, 30, 45   # wider first gap: room for the fit's x tick labels
+    MARGIN_T, MARGIN_B = 55, 55
+    total = MAIN_PX + FIRST_GAP_PX + nseries * RES_PX + (nseries - 1) * GAP_PX
+    s_max = float(np.max(data["[S]0"]))
+    xfmt = tickfmt(data["[S]0"])
+    yfmt = tickfmt(*[r["v"] for r in results])
 
     layout = {
         "title": {"text": "Michaelis-Menten Kinetics", "font": {"size": 18}},
-        "height": max(500, 300 + 150 * nseries),
-        "margin": {"l": 65, "r": 25, "t": 55, "b": 55},
+        "height": total + MARGIN_T + MARGIN_B,
+        "margin": {"l": 65, "r": 25, "t": MARGIN_T, "b": MARGIN_B},
         "legend": {"font": {"size": 11}},
         "hoverlabel": {"font": {"size": 13}, "namelength": -1},
-        "xaxis": {"title": f"[S]₀ ({ux})" if ux else "[S]₀", "domain": [0, 1], "anchor": "y", "tickformat": ".1e"},
-        
-        # ---> AJOUTER "range": [0, y_axis_max] À LA FIN DE CETTE LIGNE <---
-        "yaxis": {"title": f"v₀ ({uy})" if uy else "v₀", "domain": [1.0 - main_height, 1.0], "anchor": "x", "tickformat": ".1e", "range": [0, y_axis_max]},
+        # Fit: x axis with tick labels but no title; residuals: x2 (same range, zoom synced) carries the single "[S]0" title
+        "xaxis": {"domain": [0, 1], "zeroline": True, "tickformat": xfmt, "anchor": "y"},
+        "xaxis2": {"title": f"[S]₀ ({ux})" if ux else "[S]₀", "domain": [0, 1], "zeroline": True,
+                   "tickformat": xfmt, "anchor": f"y{nseries + 1}", "matches": "x"},
+        # Vmax always visible: the y axis stops at the next round value above max(Vmax, data)
+        "yaxis": {"title": {"text": f"v₀ ({uy})" if uy else "v₀", "standoff": 8}, "automargin": True, "zeroline": True,
+                  "domain": [1 - MAIN_PX / total, 1], "anchor": "x", "tickformat": yfmt, "range": [0, y_axis_max]},
     }
 
+    top = 1 - (MAIN_PX + FIRST_GAP_PX) / total
     for i, r in enumerate(results):
         row = i + 2
-        top = 1.0 - main_height - gap - i * (residual_height + gap)
-        layout[f"xaxis{row}"] = {"title": (f"[S]₀ ({ux})" if ux else "[S]₀") if i == nseries - 1 else "", "domain": [0, 1], "anchor": f"y{row}"}
-        layout[f"yaxis{row}"] = {"title": f"Res", "domain": [top - residual_height, top], "anchor": f"x{row}"}
+        bottom = max(top - RES_PX / total, 0.0)
+        title = "Residuals" if nseries == 1 else f"Res. {r['series']}"
+        layout[f"yaxis{row}"] = {"title": {"text": title, "standoff": 8,
+                                           "font": {"size": 12, "color": "#333" if nseries == 1 else COLORS[i % len(COLORS)]}},
+                                 "automargin": True, "zeroline": False, "domain": [bottom, top], "anchor": "x",
+                                 "tickformat": yfmt, "nticks": 4}
+        traces.append({"x": [0, s_max * 1.2], "y": [0, 0], "type": "scatter", "mode": "lines", "showlegend": False, "hoverinfo": "skip",
+                       "line": {"color": "#999", "width": 1, "dash": "dash"}, "xaxis": "x2", "yaxis": f"y{row}"})
+        top = bottom - GAP_PX / total
 
     window.Plotly.newPlot("mm-plot", window.JSON.parse(json.dumps(traces)), window.JSON.parse(json.dumps(layout)))
 
@@ -734,8 +758,8 @@ def lb_plot(e):
         "title": {"text": "Lineweaver–Burk Plot", "font": {"size": 18}},
         "height": 560, "margin": {"l": 70, "r": 25, "t": 75, "b": 65},
         "hoverlabel": {"font": {"size": 13}, "namelength": -1},
-        "xaxis": {"title": f"1 / [S]₀ {ux_inv_str}".strip(), "zeroline": True, "tickformat": ".1e"},
-        "yaxis": {"title": f"1 / v₀ {uy_inv_str}".strip(), "zeroline": True, "tickformat": ".1e"},
+        "xaxis": {"title": f"1 / [S]₀ {ux_inv_str}".strip(), "zeroline": True, "tickformat": tickfmt(*[r["x"] for r in results])},
+        "yaxis": {"title": f"1 / v₀ {uy_inv_str}".strip(), "zeroline": True, "tickformat": tickfmt(*[r["y"] for r in results])},
     }
     window.Plotly.newPlot("mm-plot", window.JSON.parse(json.dumps(traces)), window.JSON.parse(json.dumps(layout)))
 
